@@ -68,3 +68,6 @@ htmlcov/
 
 # Documentation
 .docs/
+
+# Prompts folder (untracked)
+prompts/

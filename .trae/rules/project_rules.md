@@ -1,5 +1,4 @@
-
-  Here is a strict set of rules and instructions for executing the plan. Treat this as the constitution for this project.
+Here is a strict set of rules and instructions for executing the plan. Treat this as the constitution for this project.
 
   ---
 
@@ -32,8 +31,7 @@
 
   3. Rules of Implementation & Code
 
-   1. Functions Over Classes: You are not permitted to create new classes. The only classes in this project will be the Pydantic models in
-      models.py and the AppState TypedDict. All logic in nodes.py and chains.py must be implemented as standalone functions.
+   1. Functions Over Classes: You are not permitted to create new classes, with one exception: chains.py is permitted to define local, temporary Pydantic models for the sole purpose of parsing LLM output before it is transferred to the canonical StructuredCV model. The only other classes in this project will be the Pydantic models in models.py and the AppState TypedDict. All logic in nodes.py and chains.py must be implemented as standalone functions.
    2. One Chain, One Task: Each function in chains.py must create one LCEL chain that performs a single, specific generation task (e.g., generate
       qualifications, parse a JD).
    3. Nodes Orchestrate, Chains Create: The job of a node in nodes.py is to orchestrate. It prepares data from the AppState and calls a chain. The
@@ -57,10 +55,11 @@
 
   This is the only acceptable way to implement HIL:
 
-   1. HIL is a UI concern, managed exclusively in app.py.
-   2. To request user input, a node's only job is to return a dictionary that sets a flag in the state: return {"human_review_required": True}.
-   3. The app.py file must check for this flag. If True, it must render the review UI and must not call the graph.
-   4. After gathering input, app.py is responsible for updating the state with the feedback and setting human_review_required back to False.
+   1. HIL is a coordinated effort between the graph and the UI.
+   2. To request user input, a generation node (e.g., generate_key_qualifications_node) must return a dictionary that sets the current_step in the state to a designated review state, such as return {"current_step": "awaiting_qualifications_review"}.
+   3. The graph.py router must be configured to recognize any step containing "awaiting" as a terminal state for that graph run, causing it to END.
+   4. The app.py file must check for current_step values containing "awaiting". If found, it must render the specific review UI for that step and must not call the graph.
+   5. After gathering input, app.py is responsible for updating the current_step to the next logical processing step (e.g., "start_experience_tailoring") and immediately re-invoking the graph.
 
   ---
 

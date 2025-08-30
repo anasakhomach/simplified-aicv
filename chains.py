@@ -20,7 +20,33 @@ from models import (
     CVEntry
 )
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Any
+
+
+def clean_llm_output(data: Any) -> Any:
+    """Recursively clean LLM output to ensure compatibility with Pydantic models.
+    
+    This function standardizes the LLM output at the boundary where unstructured
+    output is forced into our strict StructuredCV Pydantic model. It handles:
+    - Converting null values to empty lists for 'tags' fields
+    - Recursively processing nested structures
+    """
+    if isinstance(data, dict):
+        cleaned = {}
+        for key, value in data.items():
+            if key == 'tags' and value is None:
+                # Replace null tags with empty list
+                cleaned[key] = []
+            else:
+                # Recursively clean nested structures
+                cleaned[key] = clean_llm_output(value)
+        return cleaned
+    elif isinstance(data, list):
+        # Recursively clean list items
+        return [clean_llm_output(item) for item in data]
+    else:
+        # Return primitive values as-is
+        return data
 
 # Local Pydantic classes for chain outputs (living document pattern)
 class QualificationsOutput(BaseModel):
@@ -66,21 +92,49 @@ Be thorough and accurate in your extraction.
 """
 
 KEY_QUALIFICATIONS_PROMPT = """
-You are an expert CV writer. Generate key qualifications for a CV based on the job requirements.
+[System Instruction]
+You are an expert CV and LinkedIn profile skill generator. Your goal is to analyze the provided job description and generate a list of the 8 most relevant and impactful skills for a candidate's "Key Qualifications" section.
 
-Job Requirements:
+[Instructions for Skill Generation]
+1. **Analyze Job Description:** Carefully read the main job description below. Pay close attention to sections like "Required Qualifications," "Responsibilities," "Ideal Candidate," and "Skills." Prioritize skills mentioned frequently and those listed as essential requirements.
+
+2. **Identify Key Skills:** Extract the 8 most critical core skills and competencies sought by the employer.
+
+3. **Synthesize and Condense:** Rephrase the skills to be concise and impactful. Aim for action-oriented phrases that highlight capabilities. Each skill phrase should be **no longer than 30 characters**.
+
+4. **Format Output:** Return the skills as a valid JSON object with the exact structure shown below. Do not include any additional text, explanations, or formatting outside the JSON.
+
+5. **Generate the "Big 8" Skills:** Create exactly 8 skills that are:
+    * Highly relevant to the job description.
+    * Concise (under 30 characters).
+    * Action-oriented and impactful.
+    * Directly aligned with employer requirements.
+
+[Job Description]
 {job_requirements}
 
-Candidate's Current Skills:
+[Additional Context & Talents to Consider]
 {current_skills}
 
-Generate 4-6 key qualifications that:
-1. Directly match the job requirements
-2. Highlight the candidate's most relevant skills
-3. Use action-oriented language
-4. Are specific and measurable where possible
-5. Position the candidate as an ideal fit
+[Required JSON Output Format]
+You must return ONLY a valid JSON object with this exact structure:
 
+```json
+{{
+  "qualifications": [
+    "Data Analysis & Insights",
+    "Python for Machine Learning",
+    "Strategic Business Planning",
+    "Cloud Infrastructure Management",
+    "Agile Project Leadership",
+    "Advanced SQL & Database Design",
+    "Cross-Functional Communication",
+    "MLOps & Model Deployment"
+  ]
+}}
+```
+
+**CRITICAL:** Return ONLY the JSON object above. Do not include any explanatory text, markdown formatting, or anything outside of the JSON object.
 """
 
 EXECUTIVE_SUMMARY_PROMPT = """
@@ -351,10 +405,13 @@ Return the JSON object:"""
     def parse_and_validate_cv(json_result: dict) -> StructuredCV:
         """Parse JSON result and validate it as StructuredCV."""
         try:
-            # Create StructuredCV from the parsed JSON
-            structured_cv = StructuredCV(**json_result)
-            #name = structured_cv.personal_info['name'] if structured_cv.personal_info and 'name' in structured_cv.personal_info else 'Unknown'
-            #logger.info(f"CV parsing completed. Parsed CV for: {name}")
+            # Clean the JSON data before validation
+            cleaned_data = clean_llm_output(json_result)
+            
+            # Create StructuredCV from the cleaned JSON
+            structured_cv = StructuredCV(**cleaned_data)
+            name = structured_cv.personal_info.get('name', 'Unknown') if structured_cv.personal_info else 'Unknown'
+            logger.info(f"CV parsing completed. Parsed CV for: {name}")
             return structured_cv
         except Exception as e:
             logger.error(f"Failed to validate parsed CV: {e}")
