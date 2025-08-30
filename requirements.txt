@@ -1,0 +1,13 @@
+# Core dependencies for AI CV Generator
+streamlit
+langchain
+langchain-Core
+langchain-google-genai
+langgraph
+pydantic
+typing-extensions
+python-dotenv
+
+# Testing dependencies
+pytest
+pytest-mock

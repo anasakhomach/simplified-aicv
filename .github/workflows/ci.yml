@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install uv
+      uses: astral-sh/setup-uv@v6
+      with:
+        enable-cache: true
+        
+    - name: Install dependencies
+      run: uv pip install -r requirements.txt
+      
+    - name: Run basic syntax check
+      run: |
+        uv run python -m py_compile app.py
+        uv run python -m py_compile state.py
+        uv run python -m py_compile models.py
+        uv run python -m py_compile chains.py
+        uv run python -m py_compile nodes.py
+        uv run python -m py_compile graph.py
+        
+    - name: Test app can import
+      run: uv run python -c "import app; import state; import models; import chains; import nodes; import graph; print('All modules imported successfully')"
