@@ -74,5 +74,18 @@ htmlcov/
 # Prompts folder (untracked)
 prompts/
 
+# Trae AI rules
+.trae/
+
+# Image files
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.svg
+*.ico
+*.webp
+
 # Streamlit secrets (contains sensitive information)
 .streamlit/secrets.toml
