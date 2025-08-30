@@ -8,7 +8,7 @@ import streamlit as st
 import json
 import logging
 from typing import Dict, Any
-from state import AppState, create_initial_state
+from state import AppState, get_initial_state
 from graph import run_graph_step
 from models import StructuredCV, Section, CVEntry
 
@@ -38,7 +38,7 @@ PERSISTENCE_KEY = "cv_generation_session"
 def initialize_session_state() -> None:
     """Initialize session state with default AppState if not exists."""
     if STATE_KEY not in st.session_state:
-        st.session_state[STATE_KEY] = create_initial_state()
+        st.session_state[STATE_KEY] = get_initial_state()
 
 def get_app_state() -> AppState:
     """Get current application state from session state.
@@ -48,7 +48,7 @@ def get_app_state() -> AppState:
     """
     if STATE_KEY not in st.session_state:
         logger.info("Initializing new application state")
-        st.session_state[STATE_KEY] = create_initial_state()
+        st.session_state[STATE_KEY] = get_initial_state()
     return st.session_state[STATE_KEY]
 
 def update_app_state(new_state: AppState) -> None:
@@ -98,7 +98,7 @@ def render_sidebar() -> None:
                 load_session_from_json()
 
         if st.button("🔄 Reset Session", use_container_width=True):
-            update_app_state(create_initial_state())
+            update_app_state(get_initial_state())
             st.rerun()
 
         st.divider()
@@ -108,21 +108,21 @@ def render_sidebar() -> None:
         st.header("📊 Progress")
 
         def _has_section(state, section_type):
-            """Check if structured_cv has a section of the given type."""
-            cv_data = state.get("structured_cv")
+            """Check if tailored_cv has a section of the given type."""
+            cv_data = state.get("tailored_cv")
             if not cv_data or not hasattr(cv_data, 'sections'):
                 return False
             return any(section_type.lower() in section.name.lower() for section in cv_data.sections)
 
         progress_items = [
             ("Job Description Parsed", bool(state.get("job_description_data"))),
-            ("CV Parsed", bool(state.get("structured_cv"))),
+            ("CV Parsed", bool(state.get("tailored_cv"))),
             ("Qualifications Generated", _has_section(state, "qualifications")),
             ("Human Review Complete", not state.get("human_review_required", False)),
             ("Executive Summary", _has_section(state, "summary")),
             ("Experience Tailored", _has_section(state, "experience")),
             ("Projects Tailored", _has_section(state, "project")),
-            ("CV Finalized", bool(state.get("final_cv_data")))
+            ("CV Finalized", bool(state.get("final_cv")))
         ]
 
         for item, completed in progress_items:
@@ -239,8 +239,8 @@ def render_qualifications_review(state: AppState) -> None:
     st.header("📋 Review Key Qualifications")
     st.markdown("**Step 3:** Review the AI-generated key qualifications and choose to approve or request changes.")
 
-    # Display generated qualifications from structured_cv
-    cv_data = state.get("structured_cv")
+    # Display generated qualifications from tailored_cv
+    cv_data = state.get("tailored_cv")
     if cv_data:
         # Find the Key Qualifications section
         qualifications_section = None
@@ -265,8 +265,8 @@ def render_summary_review(state: AppState) -> None:
     st.header("📝 Review Executive Summary")
     st.markdown("**Step 4:** Review the AI-generated executive summary and choose to approve or request changes.")
 
-    # Display executive summary from structured_cv
-    cv_data = state.get("structured_cv")
+    # Display executive summary from tailored_cv
+    cv_data = state.get("tailored_cv")
     if cv_data:
         # Find the Executive Summary section
         summary_section = None
@@ -287,48 +287,180 @@ def render_summary_review(state: AppState) -> None:
     render_approval_buttons(state, "summary", "start_cv_finalization")
 
 def render_experience_review(state: AppState) -> None:
-    """Render review interface for experience tailoring."""
-    st.header("💼 Review Tailored Experience")
-    st.markdown("**Step 5:** Review the AI-tailored experience section and choose to approve or request changes.")
-
-    # Display tailored experience from structured_cv
-    cv_data = state.get("structured_cv")
-    if cv_data:
-        # Find the Experience section(s)
-        experience_sections = []
-        for section in cv_data.sections:
-            if "experience" in section.name.lower() or "work" in section.name.lower():
-                experience_sections.append(section)
+    """Render review interface for one-by-one experience tailoring."""
+    st.header("💼 Review Experience Entry")
+    
+    # Get current progress
+    item_index = state.get("item_index", 0)
+    source_cv = state.get("source_cv")
+    tailored_cv = state.get("tailored_cv")
+    
+    if not source_cv or not hasattr(source_cv, 'sections'):
+        st.error("No source CV data available for review.")
+        return
+    
+    # Find source experience entries
+    source_experience_entries = []
+    for section in source_cv.sections:
+        if "experience" in section.name.lower() or "work" in section.name.lower():
+            source_experience_entries.extend(section.entries)
+    
+    if not source_experience_entries:
+        st.warning("No experience entries found in source CV.")
+        return
+    
+    total_entries = len(source_experience_entries)
+    
+    if item_index >= total_entries:
+        st.error(f"Invalid item index: {item_index} >= {total_entries}")
+        return
+    
+    # Show progress
+    st.markdown(f"**Progress:** Entry {item_index + 1} of {total_entries}")
+    progress_bar = st.progress((item_index + 1) / total_entries)
+    
+    # Get current entry being reviewed
+    current_entry = source_experience_entries[item_index]
+    
+    # Display original vs tailored
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("📄 Original Entry")
+        with st.container():
+            st.markdown(f"**{current_entry.title}**")
+            if current_entry.subtitle:
+                st.markdown(f"*{current_entry.subtitle}*")
+            if current_entry.date_range:
+                st.markdown(f"📅 {current_entry.date_range}")
+            for detail in current_entry.details:
+                st.markdown(f"• {detail}")
+            if current_entry.tags:
+                st.markdown(f"🏷️ **Skills:** {', '.join(current_entry.tags)}")
+    
+    with col2:
+        st.subheader("🎯 AI-Tailored Entry")
+        # Get the corresponding tailored entry
+        tailored_entry = None
+        if tailored_cv and hasattr(tailored_cv, 'sections'):
+            for section in tailored_cv.sections:
+                if "experience" in section.name.lower() or "work" in section.name.lower():
+                    if len(section.entries) > item_index:
+                        tailored_entry = section.entries[item_index]
+                        break
         
-        if experience_sections:
-            st.subheader("🎯 Tailored Experience Section")
-            for section in experience_sections:
-                st.markdown(f"**{section.name}**")
-                for entry in section.entries:
-                    st.markdown(f"**{entry.title}**")
-                    if entry.subtitle:
-                        st.markdown(f"*{entry.subtitle}*")
-                    if entry.date_range:
-                        st.markdown(f"📅 {entry.date_range}")
-                    for detail in entry.details:
-                        st.markdown(f"• {detail}")
-                    if entry.tags:
-                        st.markdown(f"🏷️ **Skills:** {', '.join(entry.tags)}")
-                    st.markdown("---")
+        if tailored_entry:
+            with st.container():
+                st.markdown(f"**{tailored_entry.title}**")
+                if tailored_entry.subtitle:
+                    st.markdown(f"*{tailored_entry.subtitle}*")
+                if tailored_entry.date_range:
+                    st.markdown(f"📅 {tailored_entry.date_range}")
+                for detail in tailored_entry.details:
+                    st.markdown(f"• {detail}")
+                if tailored_entry.tags:
+                    st.markdown(f"🏷️ **Skills:** {', '.join(tailored_entry.tags)}")
         else:
-            st.warning("No experience section found in CV.")
-    else:
-        st.warning("No CV data available.")
-
-    render_approval_buttons(state, "experience", "start_projects_tailoring")
+            st.warning("Tailored entry not available yet.")
+    
+    # Feedback section
+    st.divider()
+    st.subheader("💬 Your Feedback")
+    feedback = st.text_area(
+        "Provide feedback for this specific entry (optional for approval, required for revision):",
+        value="",
+        height=100,
+        help="Provide specific feedback on what should be changed, added, or removed for this entry.",
+        placeholder="Example: This entry should emphasize cloud technologies more. Please add specific AWS services mentioned in the job description."
+    )
+    
+    # Action buttons
+    st.subheader("🎯 Choose Your Action")
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        if st.button("✅ Approve Entry", type="primary", use_container_width=True, help="Accept this tailored entry and move to the next one"):
+            logger.info(f"User approved experience entry {item_index + 1}")
+            new_state = state.copy()
+            new_state["human_feedback"] = feedback
+            new_state["human_approved"] = True
+            
+            # Increment item_index after user approval (conceptual fix #3)
+            new_state["item_index"] = item_index + 1
+            
+            if item_index + 1 >= total_entries:
+                # All entries processed, move to projects
+                new_state["current_step"] = "experience_tailoring_complete"
+            else:
+                # Continue with next entry
+                new_state["current_step"] = "continue_experience_tailoring"
+            
+            try:
+                # Run the next step immediately
+                final_state = run_graph_step(new_state)
+                update_app_state(final_state)
+                
+                if item_index + 1 >= total_entries:
+                    st.success("✅ All experience entries approved! Continuing to projects...")
+                else:
+                    st.success(f"✅ Entry {item_index + 1} approved! Continuing to entry {item_index + 2}...")
+                st.rerun()
+            except Exception as e:
+                logger.error(f"Failed to continue workflow after approval: {str(e)}")
+                st.error(f"❌ Failed to continue: {str(e)}")
+    
+    with col2:
+        if st.button("🔄 Revise Entry", use_container_width=True, help="Request changes to this specific entry"):
+            if feedback.strip():
+                logger.info(f"User requested revision for experience entry {item_index + 1}")
+                # Store feedback and regenerate this specific entry
+                new_state = state.copy()
+                new_state["human_feedback"] = feedback
+                new_state["human_approved"] = False
+                new_state["current_step"] = "continue_experience_tailoring"  # Regenerate current entry
+                
+                update_app_state(new_state)
+                st.info(f"🔄 Entry {item_index + 1} revision requested! Click 'Generate Tailored CV' to regenerate with your feedback.")
+                st.rerun()
+            else:
+                st.warning("⚠️ Please provide specific feedback before requesting revision.")
+    
+    with col3:
+        if st.button("⏭️ Skip Entry", use_container_width=True, help="Keep original entry and move to the next one"):
+            logger.info(f"User skipped experience entry {item_index + 1}")
+            new_state = state.copy()
+            new_state["human_approved"] = True  # Semantically, skipping is a form of approval of the original
+            new_state["user_intent"] = "skip"
+            
+            # Increment item_index after user action
+            new_state["item_index"] = item_index + 1
+            
+            if item_index + 1 >= total_entries:
+                new_state["current_step"] = "experience_tailoring_complete"
+            else:
+                new_state["current_step"] = "continue_experience_tailoring"
+            
+            try:
+                # Run the next step immediately
+                final_state = run_graph_step(new_state)
+                update_app_state(final_state)
+                
+                if item_index + 1 >= total_entries:
+                    st.success("✅ All experience entries processed! Continuing to projects...")
+                else:
+                    st.success(f"⏭️ Entry {item_index + 1} skipped! Continuing to entry {item_index + 2}...")
+                st.rerun()
+            except Exception as e:
+                logger.error(f"Failed to continue workflow after approval: {str(e)}")
+                st.error(f"❌ Failed to continue: {str(e)}")
 
 def render_projects_review(state: AppState) -> None:
     """Render review interface for projects tailoring."""
     st.header("🚀 Review Tailored Projects")
     st.markdown("**Step 6:** Review the AI-tailored projects section and choose to approve or request changes.")
 
-    # Display tailored projects from structured_cv
-    cv_data = state.get("structured_cv")
+    # Display tailored projects from tailored_cv
+    cv_data = state.get("tailored_cv")
     if cv_data:
         # Find the Projects section(s)
         project_sections = []
@@ -378,63 +510,43 @@ def render_approval_buttons(state: AppState, section_name: str, next_step: str) 
     with col1:
         if st.button(f"✅ Approve {section_name.title()}", type="primary", use_container_width=True, help=f"Accept the generated {section_name} and proceed to the next step"):
             logger.info(f"User approved {section_name}")
-            # Update state to continue workflow
             new_state = state.copy()
             new_state["human_feedback"] = feedback
             new_state["human_approved"] = True
             new_state["current_step"] = next_step
-            update_app_state(new_state)
-
-            # Run the next step
+            
             try:
-                new_state = run_graph_step(new_state)
-                update_app_state(new_state)
-                st.success(f"✅ {section_name.title()} approved! Continuing to next step...")
+                # Run the next step immediately
+                final_state = run_graph_step(new_state)
+                update_app_state(final_state)
+                st.success(f"✅ {section_name.title()} approved! Continuing...")
                 st.rerun()
             except Exception as e:
-                logger.error(f"Failed to continue workflow after {section_name} approval: {str(e)}")
+                logger.error(f"Failed to continue workflow after approval: {str(e)}")
                 st.error(f"❌ Failed to continue: {str(e)}")
 
     with col2:
         if st.button(f"🔄 Request {section_name.title()} Revision", use_container_width=True, help=f"Request changes to the generated {section_name}"):
             if feedback.strip():
                 logger.info(f"User requested {section_name} revision with feedback: {feedback[:100]}...")
-                # Update state with feedback and regenerate
+                # Update state with feedback and set step for regeneration
                 new_state = state.copy()
                 new_state["human_feedback"] = feedback
                 new_state["human_approved"] = False
-                # Clear the specific section's content from structured_cv to trigger regeneration
-                cv_data = new_state.get("structured_cv")
-                if cv_data:
-                    if section_name == "qualifications":
-                        # Remove qualifications section
-                        cv_data.sections = [s for s in cv_data.sections if "qualifications" not in s.name.lower()]
-                        new_state["current_step"] = "cv_parsed"  # Go back to generate qualifications
-                    elif section_name == "summary":
-                        # Remove summary section
-                        cv_data.sections = [s for s in cv_data.sections if "summary" not in s.name.lower() and "executive" not in s.name.lower()]
-                        new_state["current_step"] = "start_summary_generation"
-                    elif section_name == "experience":
-                        # Remove experience sections
-                        cv_data.sections = [s for s in cv_data.sections if "experience" not in s.name.lower() and "work" not in s.name.lower()]
-                        new_state["current_step"] = "start_experience_tailoring"
-                    elif section_name == "projects":
-                        # Remove projects sections
-                        cv_data.sections = [s for s in cv_data.sections if "project" not in s.name.lower()]
-                        new_state["current_step"] = "start_projects_tailoring"
-                    new_state["structured_cv"] = cv_data
-
+                
+                # Set the appropriate step for regeneration based on section
+                if section_name == "qualifications":
+                    new_state["current_step"] = "cv_parsed"  # Go back to generate qualifications
+                elif section_name == "summary":
+                    new_state["current_step"] = "start_summary_generation"
+                elif section_name == "experience":
+                    new_state["current_step"] = "start_experience_tailoring"
+                elif section_name == "projects":
+                    new_state["current_step"] = "start_projects_tailoring"
+                
                 update_app_state(new_state)
-
-                # Run regeneration
-                try:
-                    new_state = run_graph_step(new_state)
-                    update_app_state(new_state)
-                    st.info(f"🔄 {section_name.title()} revision requested! Regenerating content with your feedback...")
-                    st.rerun()
-                except Exception as e:
-                    logger.error(f"Failed to regenerate {section_name}: {str(e)}")
-                    st.error(f"❌ Regeneration failed: {str(e)}")
+                st.info(f"🔄 {section_name.title()} revision requested! Click 'Generate Tailored CV' to regenerate with your feedback.")
+                st.rerun()
             else:
                 logger.warning(f"User tried to request {section_name} revision without providing feedback")
                 st.warning("⚠️ Please provide specific feedback before requesting revision.")
@@ -444,7 +556,7 @@ def render_results_section() -> None:
     state = get_app_state()
 
     # Show final CV if available
-    if state.get("final_cv_data"):
+    if state.get("final_cv"):
         st.header("🎉 Your Tailored CV")
         st.markdown("**Step 4:** Your CV has been successfully tailored! Review and download below.")
 
@@ -452,14 +564,24 @@ def render_results_section() -> None:
         with st.container():
             st.markdown("### 📄 Final CV Content")
             with st.expander("Click to view your complete tailored CV", expanded=True):
-                final_cv = state["final_cv_data"]
+                final_cv = state["final_cv"]
                 if isinstance(final_cv, StructuredCV):
                     # Render structured CV
                     for section in final_cv.sections:
-                        st.markdown(f"**{section.name}**")
+                        st.markdown(f"### {section.name}")
                         for entry in section.entries:
-                            st.markdown(f"• {entry.content}")
-                        st.markdown("")
+                            if entry.title:
+                                st.markdown(f"**{entry.title}**")
+                            if entry.subtitle:
+                                st.markdown(f"*{entry.subtitle}*")
+                            if entry.date_range:
+                                st.markdown(f"_{entry.date_range}_")
+                            for detail in entry.details:
+                                st.markdown(f"- {detail}")
+                            if entry.tags:
+                                st.markdown(f"**Skills:** `{', '.join(entry.tags)}`")
+                            st.markdown("---")
+                        st.markdown("") # Add space between sections
                 else:
                     st.markdown(str(final_cv))
 
@@ -468,15 +590,25 @@ def render_results_section() -> None:
         with col1:
             # Convert structured CV to text for download
             cv_text = ""
-            if isinstance(state["final_cv_data"], StructuredCV):
-                for section in state["final_cv_data"].sections:
+            if isinstance(state["final_cv"], StructuredCV):
+                for section in state["final_cv"].sections:
                     cv_text += f"{section.name}\n"
                     cv_text += "=" * len(section.name) + "\n\n"
                     for entry in section.entries:
-                        cv_text += f"• {entry.content}\n"
+                        if entry.title:
+                            cv_text += f"{entry.title}\n"
+                        if entry.subtitle:
+                            cv_text += f"{entry.subtitle}\n"
+                        if entry.date_range:
+                            cv_text += f"{entry.date_range}\n"
+                        for detail in entry.details:
+                            cv_text += f"• {detail}\n"
+                        if entry.tags:
+                            cv_text += f"Skills: {', '.join(entry.tags)}\n"
+                        cv_text += "\n"
                     cv_text += "\n"
             else:
-                cv_text = str(state["final_cv_data"])
+                cv_text = str(state["final_cv"])
 
             st.download_button(
                 label="📄 Download as Text File",
@@ -489,20 +621,20 @@ def render_results_section() -> None:
 
         with col2:
             if st.button("🔄 Start New CV", use_container_width=True):
-                update_app_state(create_initial_state())
+                update_app_state(get_initial_state())
                 st.rerun()
 
         return
 
     # Show intermediate results if any content has been generated
-    cv_data = state.get("structured_cv")
+    cv_data = state.get("tailored_cv")
     has_content = cv_data and len(cv_data.sections) > 0
 
     if has_content:
         st.header("📋 Generated Content")
         st.markdown("**Progress:** AI is working on your CV. Generated sections will appear below.")
 
-        # Show all sections from structured_cv
+        # Show all sections from tailored_cv
         for section in cv_data.sections:
             with st.container():
                 st.markdown(f"### 🎯 {section.name}")

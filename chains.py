@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.output_parsers import StrOutputParser, JsonOutputParser
-from langchain_core.runnables import RunnablePassthrough
+from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 from models import (
     JobDescriptionData,
     StructuredCV,
@@ -56,6 +56,10 @@ class QualificationsOutput(BaseModel):
 class TailoringOutput(BaseModel):
     """Output for experience/projects tailoring."""
     tailored_sections: List[Section]
+
+class TailoredEntryOutput(BaseModel):
+    """Output for single experience entry tailoring."""
+    tailored_entry: CVEntry
 
 class SummaryOutput(BaseModel):
     """Output for executive summary generation."""
@@ -116,6 +120,8 @@ You are an expert CV and LinkedIn profile skill generator. Your goal is to analy
 [Additional Context & Talents to Consider]
 {current_skills}
 
+{human_feedback_section}
+
 [Required JSON Output Format]
 You must return ONLY a valid JSON object with this exact structure:
 
@@ -146,6 +152,8 @@ Job Description:
 Candidate's Complete Enriched CV:
 {enriched_cv}
 
+{human_feedback_section}
+
 Write a 3-4 sentence executive summary that:
 1. Opens with the candidate's professional identity
 2. Highlights years of experience and key expertise from their tailored experience
@@ -156,7 +164,7 @@ Use the enriched CV content (qualifications, tailored experience, tailored proje
 """
 
 EXPERIENCE_TAILORING_PROMPT = """
-You are an expert CV writer. Tailor the candidate's work experience for this specific job using their key qualifications as context.
+You are an expert CV writer. Tailor this single work experience entry for the specific job using the candidate's key qualifications as context.
 
 Target Job:
 {job_description}
@@ -164,10 +172,10 @@ Target Job:
 Candidate's Key Qualifications (for context):
 {key_qualifications}
 
-Current Experience:
-{current_experience}
+Current Experience Entry to Tailor:
+{current_entry}
 
-For each experience entry:
+For this experience entry:
 1. Emphasize responsibilities that match the job requirements and align with the key qualifications
 2. Quantify achievements where possible
 3. Highlight relevant technologies and skills that support the qualifications
@@ -175,9 +183,12 @@ For each experience entry:
 5. Remove or de-emphasize irrelevant details
 6. Ensure consistency with the established key qualifications
 
-Return the tailored sections as Section objects with:
-- name: MUST be exactly "Experience" (standardized section name)
-- entries: List of CVEntry objects with title, subtitle, date_range, details (list of strings), and tags (list of strings)
+Return the tailored entry as a CVEntry object with:
+- title: Job title
+- subtitle: Company name
+- date_range: Employment period
+- details: List of tailored bullet points
+- tags: List of relevant skills/technologies
 
 Maintain truthfulness while optimizing for relevance and coherence with qualifications.
 """
@@ -233,7 +244,7 @@ def create_job_description_parsing_chain():
         logger.info(f"Job description parsing completed. Extracted job title: {result.job_title}")
         return result
 
-    chain = RunnablePassthrough.assign(**{}) | log_chain_execution | prompt | llm.with_structured_output(JobDescriptionData) | log_chain_result
+    chain = RunnablePassthrough.assign(**{}) | RunnableLambda(log_chain_execution) | prompt | llm.with_structured_output(JobDescriptionData) | RunnableLambda(log_chain_result)
     return chain
 
 
@@ -247,6 +258,22 @@ def create_key_qualifications_chain():
         max_output_tokens=MAX_OUTPUT_TOKENS
     )
 
+    def prepare_inputs(inputs: Dict[str, Any]) -> Dict[str, Any]:
+        """Prepare inputs by adding human feedback section if provided."""
+        prepared = inputs.copy()
+        
+        if "human_feedback" in inputs and inputs["human_feedback"]:
+            prepared["human_feedback_section"] = f"""
+[Human Feedback - IMPORTANT]
+The user has provided specific feedback on the previous qualifications. Please incorporate this feedback:
+{inputs['human_feedback']}
+
+Adjust the qualifications based on this feedback while maintaining relevance to the job description."""
+        else:
+            prepared["human_feedback_section"] = ""
+        
+        return prepared
+
     prompt = ChatPromptTemplate.from_template(KEY_QUALIFICATIONS_PROMPT)
 
     def log_chain_execution(inputs: Dict[str, Any]) -> Dict[str, Any]:
@@ -257,7 +284,7 @@ def create_key_qualifications_chain():
         logger.info(f"Key qualifications generation completed. Generated {len(result.qualifications)} qualifications")
         return result
 
-    chain = RunnablePassthrough.assign(**{}) | log_chain_execution | prompt | llm.with_structured_output(QualificationsOutput) | log_chain_result
+    chain = RunnableLambda(prepare_inputs) | RunnableLambda(log_chain_execution) | prompt | llm.with_structured_output(QualificationsOutput) | RunnableLambda(log_chain_result)
     return chain
 
 
@@ -271,6 +298,22 @@ def create_executive_summary_chain():
         max_output_tokens=MAX_OUTPUT_TOKENS
     )
 
+    def prepare_inputs(inputs: Dict[str, Any]) -> Dict[str, Any]:
+        """Prepare inputs by adding human feedback section if provided."""
+        prepared = inputs.copy()
+        
+        if "human_feedback" in inputs and inputs["human_feedback"]:
+            prepared["human_feedback_section"] = f"""
+[Human Feedback - IMPORTANT]
+The user has provided specific feedback on the previous executive summary. Please incorporate this feedback:
+{inputs['human_feedback']}
+
+Adjust the executive summary based on this feedback while maintaining relevance to the job description and CV content."""
+        else:
+            prepared["human_feedback_section"] = ""
+        
+        return prepared
+
     prompt = ChatPromptTemplate.from_template(EXECUTIVE_SUMMARY_PROMPT)
 
     def log_chain_execution(inputs: Dict[str, Any]) -> Dict[str, Any]:
@@ -281,7 +324,7 @@ def create_executive_summary_chain():
         logger.info(f"Executive summary generation completed. Summary length: {len(result.summary)} characters")
         return result
 
-    chain = RunnablePassthrough.assign(**{}) | log_chain_execution | prompt | llm.with_structured_output(SummaryOutput) | log_chain_result
+    chain = RunnableLambda(prepare_inputs) | RunnableLambda(log_chain_execution) | prompt | llm.with_structured_output(SummaryOutput) | RunnableLambda(log_chain_result)
     return chain
 
 
@@ -301,11 +344,11 @@ def create_experience_tailoring_chain():
         logger.info(f"Executing experience tailoring chain")
         return inputs
 
-    def log_chain_result(result: TailoringOutput) -> TailoringOutput:
-        logger.info(f"Experience tailoring completed. Tailored {len(result.tailored_sections)} experience sections")
+    def log_chain_result(result: TailoredEntryOutput) -> TailoredEntryOutput:
+        logger.info(f"Experience entry tailoring completed for: {result.tailored_entry.title}")
         return result
 
-    chain = RunnablePassthrough.assign(**{}) | log_chain_execution | prompt | llm.with_structured_output(TailoringOutput) | log_chain_result
+    chain = RunnablePassthrough.assign(**{}) | RunnableLambda(log_chain_execution) | prompt | llm.with_structured_output(TailoredEntryOutput) | RunnableLambda(log_chain_result)
     return chain
 
 
@@ -329,7 +372,7 @@ def create_projects_tailoring_chain():
         logger.info(f"Projects tailoring completed. Tailored {len(result.tailored_sections)} projects")
         return result
 
-    chain = RunnablePassthrough.assign(**{}) | log_chain_execution | prompt | llm.with_structured_output(TailoringOutput) | log_chain_result
+    chain = RunnablePassthrough.assign(**{}) | RunnableLambda(log_chain_execution) | prompt | llm.with_structured_output(TailoringOutput) | RunnableLambda(log_chain_result)
     return chain
 
 
@@ -410,7 +453,7 @@ Return the JSON object:"""
             
             # Create StructuredCV from the cleaned JSON
             structured_cv = StructuredCV(**cleaned_data)
-            name = structured_cv.personal_info.get('name', 'Unknown') if structured_cv.personal_info else 'Unknown'
+            name = structured_cv.personal_info['name'] if structured_cv.personal_info and 'name' in structured_cv.personal_info else 'Unknown'
             logger.info(f"CV parsing completed. Parsed CV for: {name}")
             return structured_cv
         except Exception as e:
@@ -418,5 +461,5 @@ Return the JSON object:"""
             raise
 
     json_parser = JsonOutputParser()
-    chain = RunnablePassthrough.assign(**{}) | log_chain_execution | prompt | llm | json_parser | parse_and_validate_cv
+    chain = RunnablePassthrough.assign(**{}) | RunnableLambda(log_chain_execution) | prompt | llm | json_parser | RunnableLambda(parse_and_validate_cv)
     return chain

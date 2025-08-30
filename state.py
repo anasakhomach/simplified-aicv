@@ -21,45 +21,50 @@ class AppState(TypedDict):
     raw_cv_text: NotRequired[str]
     raw_job_description: NotRequired[str]
     
-    # Parsed Pydantic objects (not dictionaries)
+    # Parsed Pydantic objects
     job_description_data: NotRequired[JobDescriptionData]
-    structured_cv: NotRequired[StructuredCV]
+    structured_cv: NotRequired[StructuredCV]  # Transient key for passing parsed CV
     
-    # Note: No separate output models needed - using living document pattern
-    # All generated content is directly added to structured_cv
+    # Iterative processing state (workbench model)
+    source_cv: NotRequired[StructuredCV]      # Read-only original CV
+    tailored_cv: NotRequired[StructuredCV]     # Work-in-progress "living document"
+    item_index: NotRequired[int]               # Current item for iterative review
+    
+    # Final output
+    final_cv: NotRequired[StructuredCV]
     
     # Workflow control
-    current_step: NotRequired[str]  # "input", "parsing", "generating", "complete"
+    current_step: NotRequired[str]
+    workflow_complete: NotRequired[bool]
     
     # Human-in-the-loop state
     human_review_required: NotRequired[bool]
     human_feedback: NotRequired[str]
+    human_approved: NotRequired[bool]
+    user_intent: NotRequired[str]  # For signaling user actions like "skip"
     
     # Error handling
     error_message: NotRequired[str]
+    has_error: NotRequired[bool]
 
 
-def create_initial_state() -> AppState:
-    """Create and return the initial application state.
+def get_initial_state() -> AppState:
+    """Create initial application state with default values.
     
     Returns:
-        AppState: Fresh application state with default values
+        AppState: Initial state with default CV and JD loaded
     """
-    try:
-        with open("C:\\Users\\Nitro\\aicvgen\\simplified\\test-cv.txt", "r") as f:
-            default_cv = f.read()
-    except FileNotFoundError:
-        default_cv = ""
-
-    try:
-        with open("C:\\Users\\Nitro\\aicvgen\\simplified\\test-jd.txt", "r") as f:
-            default_jd = f.read()
-    except FileNotFoundError:
-        default_jd = ""
-
+    # Read default files
+    with open("test-cv.txt", "r", encoding="utf-8") as f:
+        default_cv = f.read()
+    
+    with open("test-jd.txt", "r", encoding="utf-8") as f:
+        default_jd = f.read()
+    
     return {
         "raw_cv_text": default_cv,
         "raw_job_description": default_jd,
         "current_step": "input",
-        "human_review_required": False
+        "human_review_required": False,
+        "item_index": 0
     }

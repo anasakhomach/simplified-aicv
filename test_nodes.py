@@ -9,12 +9,14 @@ from nodes import (
     generate_key_qualifications_node,
     generate_executive_summary_node,
     tailor_experience_node,
+    should_continue_experience_node,
     tailor_projects_node,
     finalize_cv_node,
     request_human_review_node
 )
 from state import AppState
 from models import StructuredCV, SkillRequirement, JobDescriptionData as JobDescription, CVEntry, Section, ExperienceLevel
+from chains import TailoredEntryOutput
 
 
 @pytest.fixture
@@ -36,6 +38,15 @@ def sample_app_state() -> AppState:
             personal_info={"name": "John Doe", "title": "Software Engineer"},
             sections=[]
         ),
+        "source_cv": StructuredCV(
+            personal_info={"name": "John Doe", "title": "Software Engineer"},
+            sections=[]
+        ),
+        "tailored_cv": StructuredCV(
+            personal_info={"name": "John Doe", "title": "Software Engineer"},
+            sections=[]
+        ),
+        "item_index": 0,
         "human_review_required": False,
         "human_feedback": ""
     }
@@ -119,23 +130,16 @@ def mock_summary_chain(monkeypatch):
 
 @pytest.fixture
 def mock_experience_tailoring_chain(monkeypatch):
-    """Mock the experience tailoring chain."""
+    """Mock the experience tailoring chain for single entry processing."""
     mock_chain = Mock()
-    mock_chain.invoke.return_value = TailoringOutput(
-        tailored_sections=[
-            Section(
-                name="Experience",
-                entries=[
-                    CVEntry(
-                        title="Senior Python Developer",
-                        subtitle="Tech Corp",
-                        date_range="2020-2023",
-                        details=["Developed scalable Python applications using Django"],
-                        tags=["Python", "Django", "Scalability"]
-                    )
-                ]
-            )
-        ]
+    mock_chain.invoke.return_value = TailoredEntryOutput(
+        tailored_entry=CVEntry(
+            title="Senior Python Developer",
+            subtitle="Tech Corp",
+            date_range="2020-2023",
+            details=["Developed scalable Python applications using Django"],
+            tags=["Python", "Django", "Scalability"]
+        )
     )
     
     def mock_create_experience_tailoring_chain():
@@ -203,7 +207,7 @@ class TestGenerateQualifications:
     def test_generate_qualifications_success(self, sample_app_state, mock_qualifications_chain):
         """Test successful qualifications generation."""
         # Add some experience to the CV
-        sample_app_state["structured_cv"].sections = [
+        sample_app_state["tailored_cv"].sections = [
             Section(
                 name="Experience",
                 entries=[
@@ -224,13 +228,13 @@ class TestGenerateQualifications:
         mock_qualifications_chain.invoke.assert_called_once()
         
         # Verify result structure
-        assert "structured_cv" in result
+        assert "tailored_cv" in result
         assert "current_step" in result
         assert result["current_step"] == "awaiting_qualifications_review"
         
         # Verify qualifications section was added
-        structured_cv = result["structured_cv"]
-        qualifications_section = next((s for s in structured_cv.sections if "qualifications" in s.name.lower()), None)
+        tailored_cv = result["tailored_cv"]
+        qualifications_section = next((s for s in tailored_cv.sections if "qualifications" in s.name.lower()), None)
         assert qualifications_section is not None
         assert len(qualifications_section.entries) == 3
 
@@ -246,13 +250,13 @@ class TestGenerateSummary:
         mock_summary_chain.invoke.assert_called_once()
         
         # Verify result structure
-        assert "structured_cv" in result
+        assert "tailored_cv" in result
         assert "current_step" in result
         assert result["current_step"] == "awaiting_summary_review"
         
         # Verify summary section was added
-        structured_cv = result["structured_cv"]
-        summary_section = next((s for s in structured_cv.sections if "summary" in s.name.lower()), None)
+        tailored_cv = result["tailored_cv"]
+        summary_section = next((s for s in tailored_cv.sections if "summary" in s.name.lower()), None)
         assert summary_section is not None
         assert len(summary_section.entries) == 1
         assert "Experienced Software Engineer" in summary_section.entries[0].details[0]
@@ -261,10 +265,99 @@ class TestGenerateSummary:
 class TestTailorExperience:
     """Test the tailor_experience_node function."""
     
-    def test_tailor_experience_success(self, sample_app_state, mock_experience_tailoring_chain):
-        """Test successful experience tailoring."""
+    def test_tailor_experience_first_iteration(self, sample_app_state, mock_experience_tailoring_chain):
+        """Test first iteration of experience tailoring."""
         # Add qualifications and experience to the CV
-        sample_app_state["structured_cv"].sections = [
+        sample_app_state["tailored_cv"].sections = [
+            Section(
+                name="qualifications",
+                entries=[
+                    CVEntry(title="", subtitle="", date_range="", details=["Python expert"], tags=[])
+                ]
+            ),
+            Section(
+                name="Experience",
+                entries=[
+                    CVEntry(
+                        title="Developer",
+                        subtitle="Company",
+                        date_range="2020-2023",
+                        details=["Built apps"],
+                        tags=["Python"]
+                    ),
+                    CVEntry(
+                        title="Junior Developer",
+                        subtitle="StartupCorp",
+                        date_range="2018-2020",
+                        details=["Learned programming"],
+                        tags=["JavaScript"]
+                    )
+                ]
+            )
+        ]
+        
+        # Initialize iterative state
+        sample_app_state["source_cv"] = sample_app_state["tailored_cv"]
+        sample_app_state["tailored_cv"] = StructuredCV(
+            personal_info=sample_app_state["tailored_cv"].personal_info,
+            sections=[
+                Section(name="Experience", entries=[])
+            ]
+        )
+        sample_app_state["item_index"] = 0
+        
+        result = tailor_experience_node(sample_app_state)
+        
+        # Verify chain was called with first entry
+        mock_experience_tailoring_chain.invoke.assert_called_once()
+        call_args = mock_experience_tailoring_chain.invoke.call_args[0][0]
+        assert "Developer" in str(call_args["current_entry"])
+        
+        # Verify result structure
+        assert "tailored_cv" in result
+        assert "current_step" in result
+        assert result["current_step"] == "experience_entry_tailored"
+        # item_index is no longer returned by tailor_experience_node (conceptual fix #3)
+        
+        # Verify tailored entry was added
+        tailored_cv = result["tailored_cv"]
+        experience_section = next((s for s in tailored_cv.sections if s.name == "Experience"), None)
+        assert experience_section is not None
+        assert len(experience_section.entries) == 1
+        assert "scalable Python applications" in experience_section.entries[0].details[0]
+    
+    def test_tailor_experience_no_experience_section(self, sample_app_state, mock_experience_tailoring_chain):
+        """Test experience tailoring when no experience section exists."""
+        # Only add qualifications, no experience
+        sample_app_state["tailored_cv"].sections = [
+            Section(
+                name="qualifications",
+                entries=[
+                    CVEntry(title="", subtitle="", date_range="", details=["Python expert"], tags=[])
+                ]
+            )
+        ]
+        
+        # Initialize iterative state
+        sample_app_state["source_cv"] = sample_app_state["tailored_cv"]
+        sample_app_state["tailored_cv"] = StructuredCV(
+            personal_info=sample_app_state["tailored_cv"].personal_info,
+            sections=[]
+        )
+        sample_app_state["item_index"] = 0
+        
+        result = tailor_experience_node(sample_app_state)
+        
+        # Verify chain was not called
+        mock_experience_tailoring_chain.invoke.assert_not_called()
+        
+        # Verify result indicates completion
+        assert result["current_step"] == "experience_tailoring_complete"
+    
+    def test_tailor_experience_creates_missing_section(self, sample_app_state, mock_experience_tailoring_chain):
+        """Test experience tailoring creates Experience section in tailored_cv when missing."""
+        # Add experience to source CV
+        sample_app_state["tailored_cv"].sections = [
             Section(
                 name="qualifications",
                 entries=[
@@ -285,21 +378,86 @@ class TestTailorExperience:
             )
         ]
         
+        # Initialize iterative state with no Experience section in tailored_cv
+        sample_app_state["source_cv"] = sample_app_state["tailored_cv"]
+        sample_app_state["tailored_cv"] = StructuredCV(
+            personal_info=sample_app_state["tailored_cv"].personal_info,
+            sections=[]  # No Experience section initially
+        )
+        sample_app_state["item_index"] = 0
+        
         result = tailor_experience_node(sample_app_state)
         
         # Verify chain was called
         mock_experience_tailoring_chain.invoke.assert_called_once()
         
-        # Verify result structure
-        assert "structured_cv" in result
+        # Verify Experience section was created and entry added
+        tailored_cv = result["tailored_cv"]
+        experience_section = next((s for s in tailored_cv.sections if s.name == "Experience"), None)
+        assert experience_section is not None
+        assert len(experience_section.entries) == 1
+        assert "scalable Python applications" in experience_section.entries[0].details[0]
+
+
+class TestShouldContinueExperience:
+    """Test the should_continue_experience_node function."""
+    
+    def test_should_continue_more_entries(self, sample_app_state):
+        """Test should continue when more entries exist."""
+        # Set up state with more entries to process
+        sample_app_state["source_cv"] = StructuredCV(
+            personal_info={"name": "John Doe"},
+            sections=[
+                Section(
+                    name="Experience",
+                    entries=[
+                        CVEntry(title="Dev1", subtitle="Co1", date_range="2020-2023", details=[], tags=[]),
+                        CVEntry(title="Dev2", subtitle="Co2", date_range="2018-2020", details=[], tags=[])
+                    ]
+                )
+            ]
+        )
+        sample_app_state["item_index"] = 1  # Still one more entry to process
+        
+        result = should_continue_experience_node(sample_app_state)
+        
         assert "current_step" in result
         assert result["current_step"] == "awaiting_experience_review"
+    
+    def test_should_continue_no_more_entries(self, sample_app_state):
+        """Test should not continue when all entries processed."""
+        # Set up state with all entries processed
+        sample_app_state["source_cv"] = StructuredCV(
+            personal_info={"name": "John Doe"},
+            sections=[
+                Section(
+                    name="Experience",
+                    entries=[
+                        CVEntry(title="Dev1", subtitle="Co1", date_range="2020-2023", details=[], tags=[])
+                    ]
+                )
+            ]
+        )
+        sample_app_state["item_index"] = 1  # All entries processed
         
-        # Verify experience section was updated
-        structured_cv = result["structured_cv"]
-        experience_section = next((s for s in structured_cv.sections if s.name == "Experience"), None)
-        assert experience_section is not None
-        assert "scalable Python applications" in experience_section.entries[0].details[0]
+        result = should_continue_experience_node(sample_app_state)
+    # Verify result indicates completion
+        assert "current_step" in result
+        assert result["current_step"] == "experience_tailoring_complete"
+    
+    def test_should_continue_no_experience_section(self, sample_app_state):
+        """Test should not continue when no experience section exists."""
+        # Set up state with no experience section
+        sample_app_state["source_cv"] = StructuredCV(
+            personal_info={"name": "John Doe"},
+            sections=[]
+        )
+        sample_app_state["item_index"] = 0
+        
+        result = should_continue_experience_node(sample_app_state)
+        
+        assert "current_step" in result
+        assert result["current_step"] == "experience_tailoring_complete"
 
 
 class TestTailorProjects:
@@ -308,7 +466,7 @@ class TestTailorProjects:
     def test_tailor_projects_success(self, sample_app_state, mock_projects_tailoring_chain):
         """Test successful projects tailoring."""
         # Add qualifications and projects to the CV
-        sample_app_state["structured_cv"].sections = [
+        sample_app_state["tailored_cv"].sections = [
             Section(
                 name="qualifications",
                 entries=[
@@ -335,13 +493,77 @@ class TestTailorProjects:
         mock_projects_tailoring_chain.invoke.assert_called_once()
         
         # Verify result structure
-        assert "structured_cv" in result
+        assert "tailored_cv" in result
         assert "current_step" in result
         assert result["current_step"] == "awaiting_projects_review"
         
         # Verify projects section was updated
-        structured_cv = result["structured_cv"]
-        projects_section = next((s for s in structured_cv.sections if s.name == "Projects"), None)
+        tailored_cv = result["tailored_cv"]
+        projects_section = next((s for s in tailored_cv.sections if s.name == "Projects"), None)
+        assert projects_section is not None
+        assert "E-commerce Platform" in projects_section.entries[0].title
+    
+    def test_tailor_projects_no_projects_section(self, sample_app_state, mock_projects_tailoring_chain):
+        """Test projects tailoring when no projects section exists."""
+        # Only add qualifications, no projects
+        sample_app_state["tailored_cv"].sections = [
+            Section(
+                name="qualifications",
+                entries=[
+                    CVEntry(title="", subtitle="", date_range="", details=["Python expert"], tags=[])
+                ]
+            )
+        ]
+        
+        result = tailor_projects_node(sample_app_state)
+        
+        # Verify chain was not called
+        mock_projects_tailoring_chain.invoke.assert_not_called()
+        
+        # Verify result indicates completion
+        assert result["current_step"] == "projects_tailored"
+    
+    def test_tailor_projects_creates_missing_section(self, sample_app_state, mock_projects_tailoring_chain):
+        """Test projects tailoring creates Projects section when missing."""
+        # Add projects to source CV
+        sample_app_state["tailored_cv"].sections = [
+            Section(
+                name="qualifications",
+                entries=[
+                    CVEntry(title="", subtitle="", date_range="", details=["Python expert"], tags=[])
+                ]
+            ),
+            Section(
+                name="Projects",
+                entries=[
+                    CVEntry(
+                        title="Web App",
+                        subtitle="Personal",
+                        date_range="2022",
+                        details=["Built web app"],
+                        tags=["Python"]
+                    )
+                ]
+            )
+        ]
+        
+        # Remove Projects section initially (simulating missing section scenario)
+        original_sections = sample_app_state["tailored_cv"].sections.copy()
+        sample_app_state["tailored_cv"].sections = [
+            s for s in original_sections if s.name != "Projects"
+        ]
+        
+        # Add Projects back to simulate source having it
+        sample_app_state["tailored_cv"].sections = original_sections
+        
+        result = tailor_projects_node(sample_app_state)
+        
+        # Verify chain was called
+        mock_projects_tailoring_chain.invoke.assert_called_once()
+        
+        # Verify Projects section was created/updated
+        tailored_cv = result["tailored_cv"]
+        projects_section = next((s for s in tailored_cv.sections if s.name == "Projects"), None)
         assert projects_section is not None
         assert "E-commerce Platform" in projects_section.entries[0].title
 
@@ -366,7 +588,7 @@ class TestRequestHumanReview:
     def test_request_review_with_qualifications(self, sample_app_state):
         """Test human review request with qualifications."""
         # Add qualifications to the CV
-        sample_app_state["structured_cv"].sections = [
+        sample_app_state["tailored_cv"].sections = [
             Section(
                 name="qualifications",
                 entries=[

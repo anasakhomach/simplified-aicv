@@ -19,6 +19,15 @@ def base_app_state() -> AppState:
             personal_info={"name": "John Doe"},
             sections=[]
         ),
+        "source_cv": StructuredCV(
+            personal_info={"name": "John Doe"},
+            sections=[]
+        ),
+        "tailored_cv": StructuredCV(
+            personal_info={"name": "John Doe"},
+            sections=[]
+        ),
+        "item_index": 0,
         "human_review_required": False,
         "human_feedback": "",
         "review_content": ""
@@ -40,9 +49,15 @@ class TestWorkflowRouter:
         result = workflow_router(base_app_state)
         assert result == "parse_cv"
     
-    def test_router_cv_parsed_to_generate_qualifications(self, base_app_state):
-        """Test routing from CV parsed to generate qualifications."""
+    def test_router_cv_parsed_to_setup_iterative_session(self, base_app_state):
+        """Test routing from CV parsed to setup iterative session."""
         base_app_state["current_step"] = "cv_parsed"
+        result = workflow_router(base_app_state)
+        assert result == "setup_iterative_session"
+    
+    def test_router_iterative_session_ready_to_generate_qualifications(self, base_app_state):
+        """Test routing from iterative session ready to generate qualifications."""
+        base_app_state["current_step"] = "iterative_session_ready"
         result = workflow_router(base_app_state)
         assert result == "generate_qualifications"
     
@@ -58,9 +73,21 @@ class TestWorkflowRouter:
         result = workflow_router(base_app_state)
         assert result == "tailor_experience"
     
-    def test_router_experience_approved_to_tailor_projects(self, base_app_state):
-        """Test routing from experience approved to tailor projects."""
-        base_app_state["current_step"] = "experience_approved"
+    def test_router_experience_entry_tailored_to_should_continue(self, base_app_state):
+        """Test routing from experience entry tailored to should continue decision."""
+        base_app_state["current_step"] = "experience_entry_tailored"
+        result = workflow_router(base_app_state)
+        assert result == "should_continue_experience"
+    
+    def test_router_continue_experience_tailoring_to_tailor_experience(self, base_app_state):
+        """Test routing from continue experience tailoring back to tailor experience."""
+        base_app_state["current_step"] = "continue_experience_tailoring"
+        result = workflow_router(base_app_state)
+        assert result == "tailor_experience"
+    
+    def test_router_experience_tailoring_complete_to_tailor_projects(self, base_app_state):
+        """Test routing from experience tailoring complete to tailor projects."""
+        base_app_state["current_step"] = "experience_tailoring_complete"
         result = workflow_router(base_app_state)
         assert result == "tailor_projects"
     
@@ -222,11 +249,13 @@ class TestCreateCVGenerationGraph:
         # Verify all nodes are added
         expected_nodes = [
             "parse_job_description",
-            "parse_cv", 
+            "parse_cv",
+            "setup_iterative_session",
             "generate_qualifications",
             "human_review",
             "generate_summary",
             "tailor_experience",
+            "should_continue_experience",
             "tailor_projects",
             "finalize_cv",
             "router"

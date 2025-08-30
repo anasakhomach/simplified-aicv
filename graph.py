@@ -11,10 +11,12 @@ from state import AppState
 from nodes import (
     parse_job_description_node,
     parse_cv_node,
+    setup_iterative_session_node,
     generate_key_qualifications_node,
     request_human_review_node,
     generate_executive_summary_node,
     tailor_experience_node,
+    should_continue_experience_node,
     tailor_projects_node,
     finalize_cv_node
 )
@@ -25,10 +27,12 @@ logger = logging.getLogger(__name__)
 # Constants for node names
 PARSE_JD_NODE = "parse_job_description"
 PARSE_CV_NODE = "parse_cv"
+SETUP_ITERATIVE_SESSION_NODE = "setup_iterative_session"
 GENERATE_QUALIFICATIONS_NODE = "generate_qualifications"
 HUMAN_REVIEW_NODE = "human_review"
 GENERATE_SUMMARY_NODE = "generate_summary"
 TAILOR_EXPERIENCE_NODE = "tailor_experience"
+SHOULD_CONTINUE_EXPERIENCE_NODE = "should_continue_experience"
 TAILOR_PROJECTS_NODE = "tailor_projects"
 FINALIZE_CV_NODE = "finalize_cv"
 
@@ -44,10 +48,12 @@ def create_cv_generation_graph() -> StateGraph:
     # Add nodes to the graph
     workflow.add_node(PARSE_JD_NODE, parse_job_description_node)
     workflow.add_node(PARSE_CV_NODE, parse_cv_node)
+    workflow.add_node(SETUP_ITERATIVE_SESSION_NODE, setup_iterative_session_node)
     workflow.add_node(GENERATE_QUALIFICATIONS_NODE, generate_key_qualifications_node)
     workflow.add_node(HUMAN_REVIEW_NODE, request_human_review_node)
     workflow.add_node(GENERATE_SUMMARY_NODE, generate_executive_summary_node)
     workflow.add_node(TAILOR_EXPERIENCE_NODE, tailor_experience_node)
+    workflow.add_node(SHOULD_CONTINUE_EXPERIENCE_NODE, should_continue_experience_node)
     workflow.add_node(TAILOR_PROJECTS_NODE, tailor_projects_node)
     workflow.add_node(FINALIZE_CV_NODE, finalize_cv_node)
     
@@ -64,9 +70,11 @@ def create_cv_generation_graph() -> StateGraph:
         {
             PARSE_JD_NODE: PARSE_JD_NODE,
             PARSE_CV_NODE: PARSE_CV_NODE,
+            SETUP_ITERATIVE_SESSION_NODE: SETUP_ITERATIVE_SESSION_NODE,
             GENERATE_QUALIFICATIONS_NODE: GENERATE_QUALIFICATIONS_NODE,
             GENERATE_SUMMARY_NODE: GENERATE_SUMMARY_NODE,
             TAILOR_EXPERIENCE_NODE: TAILOR_EXPERIENCE_NODE,
+            SHOULD_CONTINUE_EXPERIENCE_NODE: SHOULD_CONTINUE_EXPERIENCE_NODE,
             TAILOR_PROJECTS_NODE: TAILOR_PROJECTS_NODE,
             FINALIZE_CV_NODE: FINALIZE_CV_NODE,
             END: END
@@ -76,10 +84,12 @@ def create_cv_generation_graph() -> StateGraph:
     # All nodes return to router for next step determination
     workflow.add_edge(PARSE_JD_NODE, "router")
     workflow.add_edge(PARSE_CV_NODE, "router")
+    workflow.add_edge(SETUP_ITERATIVE_SESSION_NODE, "router")
     workflow.add_edge(GENERATE_QUALIFICATIONS_NODE, "router")
     workflow.add_edge(HUMAN_REVIEW_NODE, "router")
     workflow.add_edge(GENERATE_SUMMARY_NODE, "router")
     workflow.add_edge(TAILOR_EXPERIENCE_NODE, "router")
+    workflow.add_edge(SHOULD_CONTINUE_EXPERIENCE_NODE, "router")
     workflow.add_edge(TAILOR_PROJECTS_NODE, "router")
     workflow.add_edge(FINALIZE_CV_NODE, "router")
     
@@ -107,10 +117,16 @@ def workflow_router(state: AppState) -> str:
     elif current_step == "job_description_parsed":
         return PARSE_CV_NODE
     elif current_step == "cv_parsed":
+        return SETUP_ITERATIVE_SESSION_NODE
+    elif current_step == "iterative_session_ready":
         return GENERATE_QUALIFICATIONS_NODE
     elif current_step == "qualifications_approved" or current_step == "start_experience_tailoring":
         return TAILOR_EXPERIENCE_NODE
-    elif current_step == "experience_approved" or current_step == "start_projects_tailoring":
+    elif current_step == "experience_entry_tailored":
+        return SHOULD_CONTINUE_EXPERIENCE_NODE
+    elif current_step == "continue_experience_tailoring":
+        return TAILOR_EXPERIENCE_NODE
+    elif current_step == "experience_tailoring_complete" or current_step == "start_projects_tailoring":
         return TAILOR_PROJECTS_NODE
     elif current_step == "projects_approved" or current_step == "start_summary_generation":
         return GENERATE_SUMMARY_NODE
