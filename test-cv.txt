@@ -1,0 +1,111 @@
+Anas AKHOMACH
+Email: anasakhomach205@gmail.com
+LinkedIn: [linkedin.com/in/anas-akhomach](https://www.google.com/search?q=https://linkedin.com/in/anas-akhomach)
+GitHub: [github.com/AnasAkhomach](https://www.google.com/search?q=https://github.com/AnasAkhomach)
+Phone: (+212) 600310536
+
+-----
+
+Your data is screaming at you - but are you listening? I am.
+While others see chaotic datasets, I see treasure hunts. I clean and validate databases like Marie Kondo, visualize so compellingly that stakeholders say "Show me that again\!", create amazingly accurate predictive models, and uncover hidden insights in your spreadsheets. No ten years of experience? True. But I am relentlessly curious and recognize patterns that others miss.
+Ready to stop guessing and start knowing?
+
+-----
+
+### **Skills**:
+
+SQL & Data Querying | Python Programming | Data Visualization
+Data Analysis & Insights | ETL Development | Machine Learning
+Data-Driven Decision-Making | Process Optimization & Systems Thinking | Innovation & Process Improvement
+
+-----
+
+### **Project Experience**:
+
+#### **AI-Powered CV Generator - aicvgen (SaaS Project, In Development)**
+
+*Tools: Python, Google Gemini LLM, LangGraph, Streamlit, ChromaDB, Docker.*
+
+  * Developed an AI-powered application for the automated creation of customized CVs using Google Gemini.
+  * Designed and implemented a modular, agent-based system architecture with LangGraph orchestration and Dependency Injection for high maintainability and scalability.
+  * Significantly reduced the effort required to adapt CVs to specific job advertisements, thereby increasing application efficiency.
+
+#### **ERP Process Automation and Dynamic Dashboard Development**
+
+*Tools: Sylob ERP, SQL, Excel VBA, QR Scanner*
+
+  * Developed integrated dashboards, reducing daily inventory reconciliation from 4 hours to 15 minutes.
+  * Developed Excel/VBA tools to automate daily reports and synchronize over 10 datasets with Sylob.
+  * Created HTML mockups, reducing development time for ERP interfaces through rapid prototyping.
+  * Optimized raw material workflows, reducing manual data errors, and improving real-time inventory accuracy.
+  * Integrated QR code tracking, which reduced the time for material tracking in the production line.
+
+#### **Operating Room Scheduling and Management System Optimization (Final Year Project)**
+
+*Tools: Python, MongoDB, PyMongo, Google Calendar API*
+
+  * Developed a rule-based planning system using Tabu Search, which improved the utilization of operating rooms.
+  * Created a performance dashboard to track key performance indicators, including facility efficiency and workload distribution.
+  * Developed a classifier for the urgency of surgical procedures using Python, which prioritized emergencies with 75% adherence to the schedule.
+  * Created a performance dashboard to track KPIs, including equipment efficiency and workload balance.
+  * Improved operating room utilization through dynamic time slot optimization with Tabu Search.
+  * Optimized Tabu Search parameters, reducing the calculation time for scheduling from hours to under 5 minutes.
+
+-----
+
+### **Professional Experience**:
+
+#### **Data Analyst [Trainee]**
+
+*STE Smart-Send | Tetouan, Morocco (Mar. 2024 - Jun. 2024)*
+Advanced eCommerce Analysis System
+*Tools: SQL, MySQL, temporary tables, window functions, CTEs, Google Analytics*
+
+  * Analyzed over 100,000 transactions using SQL, which increased conversion rates by 8%.
+  * Built conversion funnels using SQL, which revealed a 40% drop-off in the shipping phase.
+  * Optimized cross-device ad budget allocation, which increased revenue per session.
+  * Identified higher conversion rates on desktop versus mobile traffic, leading to a redesign of the user experience and optimization of ad budgets.
+  * Developed seasonal trend models using SQL, which predicted higher traffic during holidays for inventory planning.
+
+#### **IT Instructor**
+
+*Supply Chain Management Center | Tetouan, Morocco (Jun - Sep 2022, Jun - Sep 2024)*
+
+  * Taught users how to develop and use Excel formulas, pivot tables, dashboards, and automated reporting tools.
+
+#### **Mathematics Teacher**
+
+*Martile Secondary School | Tetouan, Morocco (Sep. 2017 – June. 2024)*
+
+  * Coached over 5 students to top-10 placements in national mathematics competitions.
+
+-----
+
+### **Education**:
+
+#### **Bachelor of Science in Applied Mathematics**
+
+*Abdelmalek Essaâdi University | Tetouan, Morocco.*
+*Recognized as a German university degree at the bachelor's level (Statement of Comparability from the ZAB)*
+
+#### **High School Diploma (Mathematics and Engineering)**
+
+*Lycée fqih Daoued | Mdiq, Morocco.*
+
+-----
+
+### **Certifications**:
+
+  * Google Advanced Data Analytics (Coursera, 2025)
+  * Business Intelligence Analyst (Maven Analytics, 2024)
+  * Python for Data Analytics (Maven Analytics, 2024)
+
+-----
+
+### **Languages**:
+
+  * Arabic (Native)
+  * English (TOEIC B2)
+  * German (telc B2)
+  * French (B2)
+  * Spanish (B1)
