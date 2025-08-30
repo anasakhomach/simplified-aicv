@@ -71,3 +71,6 @@ htmlcov/
 
 # Prompts folder (untracked)
 prompts/
+
+# Streamlit secrets (contains sensitive information)
+.streamlit/secrets.toml
