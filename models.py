@@ -5,9 +5,10 @@ Following the constitutional rules, these are the only classes permitted
 in the project besides AppState TypedDict.
 """
 
-from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field
 from enum import Enum
+from typing import List, Optional, Dict
+from pydantic import BaseModel, Field
+
 
 
 class ExperienceLevel(str, Enum):

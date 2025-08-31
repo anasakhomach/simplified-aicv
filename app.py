@@ -3,14 +3,15 @@
 This is the main entry point and UI controller. It serves as the gatekeeper
 for st.session_state and orchestrates the entire workflow.
 """
+# pylint: disable=logging-fstring-interpolation
+# pylint: disable=line-too-long
 
-import streamlit as st
 import json
 import logging
-from typing import Dict, Any
+import streamlit as st
 from state import AppState, get_initial_state
 from graph import run_graph_step
-from models import StructuredCV, Section, CVEntry
+from models import StructuredCV
 
 # Configure logging for Streamlit
 logging.basicConfig(
@@ -83,6 +84,11 @@ def load_session_from_json() -> None:
     except Exception as e:
         st.error(f"Failed to load session: {str(e)}")
 
+
+
+
+
+## Fisrt UI Rendering Of The Side-Bar Happen Here. ==================
 def render_sidebar() -> None:
     """Render the sidebar with session management and progress."""
     with st.sidebar:
@@ -119,9 +125,9 @@ def render_sidebar() -> None:
             ("CV Parsed", bool(state.get("tailored_cv"))),
             ("Qualifications Generated", _has_section(state, "qualifications")),
             ("Human Review Complete", not state.get("human_review_required", False)),
-            ("Executive Summary", _has_section(state, "summary")),
             ("Experience Tailored", _has_section(state, "experience")),
             ("Projects Tailored", _has_section(state, "project")),
+            ("Executive Summary", _has_section(state, "summary")),
             ("CV Finalized", bool(state.get("final_cv")))
         ]
 
@@ -132,7 +138,11 @@ def render_sidebar() -> None:
         # Error display
         if state.get("has_error"):
             st.error(f"Error: {state.get('error_message', 'Unknown error')}")
+## End of Side-Bar Rendering. =======================================
 
+
+
+## Input Section Rendering. =========================================
 def render_input_section() -> None:
     """Render the input section for job description and CV."""
     st.header("📝 Input Your Information")
@@ -145,7 +155,7 @@ def render_input_section() -> None:
         job_description = st.text_area(
             "Paste the job description here:",
             value=get_app_state().get("raw_job_description", ""),
-            height=300,
+            height=200,
             help="Copy and paste the complete job description from the job posting.",
             placeholder="Paste the full job description here...\n\nExample:\nWe are looking for a Senior Software Engineer with experience in Python, React, and cloud technologies..."
         )
@@ -161,7 +171,7 @@ def render_input_section() -> None:
         cv_text = st.text_area(
             "Paste your current CV text here:",
             value=get_app_state().get("raw_cv_text", ""),
-            height=300,
+            height=200,
             help="Copy and paste your current CV content in plain text format.",
             placeholder="Paste your CV content here...\n\nExample:\nJohn Doe\nSoftware Engineer\n\nExperience:\n- 5 years in web development\n- Python, JavaScript, React..."
         )
@@ -171,6 +181,9 @@ def render_input_section() -> None:
             state = get_app_state()
             state["raw_cv_text"] = cv_text
             update_app_state(state)
+## End of Input Section Rendering. ==================================
+
+
 
 def render_workflow_controls() -> None:
     """Render workflow control buttons."""
@@ -178,7 +191,6 @@ def render_workflow_controls() -> None:
     st.markdown("**Step 2:** Click the button below to start the AI-powered CV generation process.")
 
     state = get_app_state()
-
     # Check if we have required inputs
     has_inputs = bool(state.get("raw_job_description")) and bool(state.get("raw_cv_text"))
 
@@ -225,41 +237,22 @@ def render_section_review_ui(current_step: str) -> None:
     # Determine which section is being reviewed
     if current_step == "awaiting_qualifications_review":
         render_qualifications_review(state)
-    elif current_step == "awaiting_summary_review":
-        render_summary_review(state)
     elif current_step == "awaiting_experience_review":
         render_experience_review(state)
     elif current_step == "awaiting_projects_review":
         render_projects_review(state)
+    elif current_step == "awaiting_summary_review":
+        render_summary_review(state)
     else:
         st.error(f"Unknown review state: {current_step}")
 
-def render_qualifications_review(state: AppState) -> None:
-    """Render review interface for key qualifications."""
-    st.header("📋 Review Key Qualifications")
-    st.markdown("**Step 3:** Review the AI-generated key qualifications and choose to approve or request changes.")
+## for post MVP:
+## we need to Move the  UI sections Rendering Helper Functions Outside the App.py. =======================================
+## Create a new Directory called ui-helpers
 
-    # Display generated qualifications from tailored_cv
-    cv_data = state.get("tailored_cv")
-    if cv_data:
-        # Find the Key Qualifications section
-        qualifications_section = None
-        for section in cv_data.sections:
-            if "qualifications" in section.name.lower():
-                qualifications_section = section
-                break
-        
-        if qualifications_section:
-            st.subheader("🎯 Generated Key Qualifications")
-            for i, entry in enumerate(qualifications_section.entries, 1):
-                st.markdown(f"• {entry.title}")
-        else:
-            st.warning("No qualifications section found in CV.")
-    else:
-        st.warning("No CV data available.")
 
-    render_approval_buttons(state, "qualifications", "start_experience_tailoring")
-
+## Create a new Python File and call render_summary.py
+## Move the render_summary_review function to the render_summary.py file.
 def render_summary_review(state: AppState) -> None:
     """Render review interface for executive summary."""
     st.header("📝 Review Executive Summary")
@@ -274,7 +267,7 @@ def render_summary_review(state: AppState) -> None:
             if "summary" in section.name.lower() or "executive" in section.name.lower():
                 summary_section = section
                 break
-        
+
         if summary_section:
             st.subheader("📄 Generated Executive Summary")
             for entry in summary_section.entries:
@@ -286,45 +279,76 @@ def render_summary_review(state: AppState) -> None:
 
     render_approval_buttons(state, "summary", "start_cv_finalization")
 
+
+## Create a new Python File and call render_qualifications.py
+## Move the render_qualifications_review function to the render_qualifications.py file.
+def render_qualifications_review(state: AppState) -> None:
+    """Render review interface for key qualifications."""
+    st.header("📋 Review Key Qualifications")
+    st.markdown("**Step 3:** Review the AI-generated key qualifications and choose to approve or request changes.")
+
+    # Display generated qualifications from tailored_cv
+    cv_data = state.get("tailored_cv")
+    if cv_data:
+        # Find the Key Qualifications section
+        qualifications_section = None
+        for section in cv_data.sections:
+            if "qualifications" in section.name.lower():                # we need a better way to search for the section.
+                qualifications_section = section
+                break
+
+        if qualifications_section:
+            st.subheader("🎯 Generated Key Qualifications")
+            for i, entry in enumerate(qualifications_section.entries, 1):       # we need a better way to display the generated key qualifications.
+                st.markdown(f"• {entry.title}")
+        else:
+            st.warning("No qualifications section found in CV.")
+    else:
+        st.warning("No CV data available.")
+
+    render_approval_buttons(state, "qualifications", "start_experience_tailoring")
+
+## Create a new Python File and call render_experience.py
+## Move the render_experience_review function to the render_experience.py file.
 def render_experience_review(state: AppState) -> None:
     """Render review interface for one-by-one experience tailoring."""
     st.header("💼 Review Experience Entry")
-    
+
     # Get current progress
     item_index = state.get("item_index", 0)
     source_cv = state.get("source_cv")
     tailored_cv = state.get("tailored_cv")
-    
+
     if not source_cv or not hasattr(source_cv, 'sections'):
         st.error("No source CV data available for review.")
         return
-    
+
     # Find source experience entries
     source_experience_entries = []
     for section in source_cv.sections:
         if "experience" in section.name.lower() or "work" in section.name.lower():
             source_experience_entries.extend(section.entries)
-    
+
     if not source_experience_entries:
         st.warning("No experience entries found in source CV.")
         return
-    
+
     total_entries = len(source_experience_entries)
-    
+
     if item_index >= total_entries:
         st.error(f"Invalid item index: {item_index} >= {total_entries}")
         return
-    
+
     # Show progress
     st.markdown(f"**Progress:** Entry {item_index + 1} of {total_entries}")
     progress_bar = st.progress((item_index + 1) / total_entries)
-    
+
     # Get current entry being reviewed
     current_entry = source_experience_entries[item_index]
-    
+
     # Display original vs tailored
     col1, col2 = st.columns(2)
-    
+
     with col1:
         st.subheader("📄 Original Entry")
         with st.container():
@@ -337,7 +361,7 @@ def render_experience_review(state: AppState) -> None:
                 st.markdown(f"• {detail}")
             if current_entry.tags:
                 st.markdown(f"🏷️ **Skills:** {', '.join(current_entry.tags)}")
-    
+
     with col2:
         st.subheader("🎯 AI-Tailored Entry")
         # Get the corresponding tailored entry
@@ -348,7 +372,7 @@ def render_experience_review(state: AppState) -> None:
                     if len(section.entries) > item_index:
                         tailored_entry = section.entries[item_index]
                         break
-        
+
         if tailored_entry:
             with st.container():
                 st.markdown(f"**{tailored_entry.title}**")
@@ -362,7 +386,7 @@ def render_experience_review(state: AppState) -> None:
                     st.markdown(f"🏷️ **Skills:** {', '.join(tailored_entry.tags)}")
         else:
             st.warning("Tailored entry not available yet.")
-    
+
     # Feedback section
     st.divider()
     st.subheader("💬 Your Feedback")
@@ -373,33 +397,33 @@ def render_experience_review(state: AppState) -> None:
         help="Provide specific feedback on what should be changed, added, or removed for this entry.",
         placeholder="Example: This entry should emphasize cloud technologies more. Please add specific AWS services mentioned in the job description."
     )
-    
+
     # Action buttons
     st.subheader("🎯 Choose Your Action")
     col1, col2, col3 = st.columns(3)
-    
+
     with col1:
         if st.button("✅ Approve Entry", type="primary", use_container_width=True, help="Accept this tailored entry and move to the next one"):
             logger.info(f"User approved experience entry {item_index + 1}")
             new_state = state.copy()
             new_state["human_feedback"] = feedback
             new_state["human_approved"] = True
-            
+
             # Increment item_index after user approval (conceptual fix #3)
             new_state["item_index"] = item_index + 1
-            
+
             if item_index + 1 >= total_entries:
                 # All entries processed, move to projects
                 new_state["current_step"] = "experience_tailoring_complete"
             else:
                 # Continue with next entry
                 new_state["current_step"] = "continue_experience_tailoring"
-            
+
             try:
                 # Run the next step immediately
                 final_state = run_graph_step(new_state)
                 update_app_state(final_state)
-                
+
                 if item_index + 1 >= total_entries:
                     st.success("✅ All experience entries approved! Continuing to projects...")
                 else:
@@ -408,7 +432,7 @@ def render_experience_review(state: AppState) -> None:
             except Exception as e:
                 logger.error(f"Failed to continue workflow after approval: {str(e)}")
                 st.error(f"❌ Failed to continue: {str(e)}")
-    
+
     with col2:
         if st.button("🔄 Revise Entry", use_container_width=True, help="Request changes to this specific entry"):
             if feedback.strip():
@@ -418,33 +442,33 @@ def render_experience_review(state: AppState) -> None:
                 new_state["human_feedback"] = feedback
                 new_state["human_approved"] = False
                 new_state["current_step"] = "continue_experience_tailoring"  # Regenerate current entry
-                
+
                 update_app_state(new_state)
                 st.info(f"🔄 Entry {item_index + 1} revision requested! Click 'Generate Tailored CV' to regenerate with your feedback.")
                 st.rerun()
             else:
                 st.warning("⚠️ Please provide specific feedback before requesting revision.")
-    
+
     with col3:
         if st.button("⏭️ Skip Entry", use_container_width=True, help="Keep original entry and move to the next one"):
             logger.info(f"User skipped experience entry {item_index + 1}")
             new_state = state.copy()
             new_state["human_approved"] = True  # Semantically, skipping is a form of approval of the original
             new_state["user_intent"] = "skip"
-            
+
             # Increment item_index after user action
             new_state["item_index"] = item_index + 1
-            
+
             if item_index + 1 >= total_entries:
                 new_state["current_step"] = "experience_tailoring_complete"
             else:
                 new_state["current_step"] = "continue_experience_tailoring"
-            
+
             try:
                 # Run the next step immediately
                 final_state = run_graph_step(new_state)
                 update_app_state(final_state)
-                
+
                 if item_index + 1 >= total_entries:
                     st.success("✅ All experience entries processed! Continuing to projects...")
                 else:
@@ -454,6 +478,9 @@ def render_experience_review(state: AppState) -> None:
                 logger.error(f"Failed to continue workflow after approval: {str(e)}")
                 st.error(f"❌ Failed to continue: {str(e)}")
 
+
+## Create a new Python File and call render_projects.py
+## Move the render_projects_review function to the render_projects.py file.
 def render_projects_review(state: AppState) -> None:
     """Render review interface for projects tailoring."""
     st.header("🚀 Review Tailored Projects")
@@ -467,7 +494,7 @@ def render_projects_review(state: AppState) -> None:
         for section in cv_data.sections:
             if "project" in section.name.lower():
                 project_sections.append(section)
-        
+
         if project_sections:
             st.subheader("🎯 Tailored Projects Section")
             for section in project_sections:
@@ -489,6 +516,9 @@ def render_projects_review(state: AppState) -> None:
         st.warning("No CV data available.")
 
     render_approval_buttons(state, "projects", "start_summary_generation")
+
+
+## we alse need to render the static sections fron the source cv. =======================================
 
 def render_approval_buttons(state: AppState, section_name: str, next_step: str) -> None:
     """Render approval buttons for a specific section."""
@@ -514,7 +544,7 @@ def render_approval_buttons(state: AppState, section_name: str, next_step: str) 
             new_state["human_feedback"] = feedback
             new_state["human_approved"] = True
             new_state["current_step"] = next_step
-            
+
             try:
                 # Run the next step immediately
                 final_state = run_graph_step(new_state)
@@ -533,7 +563,7 @@ def render_approval_buttons(state: AppState, section_name: str, next_step: str) 
                 new_state = state.copy()
                 new_state["human_feedback"] = feedback
                 new_state["human_approved"] = False
-                
+
                 # Set the appropriate step for regeneration based on section
                 if section_name == "qualifications":
                     new_state["current_step"] = "cv_parsed"  # Go back to generate qualifications
@@ -543,7 +573,7 @@ def render_approval_buttons(state: AppState, section_name: str, next_step: str) 
                     new_state["current_step"] = "start_experience_tailoring"
                 elif section_name == "projects":
                     new_state["current_step"] = "start_projects_tailoring"
-                
+
                 update_app_state(new_state)
                 st.info(f"🔄 {section_name.title()} revision requested! Click 'Generate Tailored CV' to regenerate with your feedback.")
                 st.rerun()

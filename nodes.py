@@ -4,6 +4,8 @@ This module contains stateless node functions that orchestrate the workflow.
 Following the constitutional rules, nodes take AppState as input and return
 a Python dictionary as output. They must not have side effects.
 """
+# pylint: disable=logging-fstring-interpolation
+# pylint: disable=line-too-long
 
 import logging
 from typing import Dict, Any
@@ -47,6 +49,33 @@ def parse_job_description_node(state: AppState) -> Dict[str, Any]:
         return {"error_message": f"Failed to parse job description: {str(e)}"}
 
 
+def parse_cv_node(state: AppState) -> Dict[str, Any]:
+    """Parse the raw CV text into structured format."""
+    logger.info("Starting CV parsing node")
+
+    if "raw_cv_text" not in state:
+        logger.error("raw_cv_text key not found in state")
+        return {
+            "error_message": "Failed to parse CV: raw_cv_text key not found in state"
+        }
+
+    try:
+        chain = create_cv_parsing_chain()
+        result = chain.invoke({"cv_text": state["raw_cv_text"]})
+
+        logger.info(
+            f"CV parsing successful. Candidate: {result.personal_info['name'] if result.personal_info and 'name' in result.personal_info else 'Unknown'}"
+        )
+        return {"structured_cv": result, "current_step": "cv_parsed"}
+    except Exception as e:
+        logger.error(f"CV parsing failed: {str(e)}")
+        return {
+            "error_message": f"CV parsing failed: {str(e)}. Please check the CV format and try again.",
+            "human_review_required": True,
+            "current_step": "cv_parsing_failed",
+        }
+
+
 def setup_iterative_session_node(state: AppState) -> Dict[str, Any]:
     """Setup the iterative session by initializing source_cv, tailored_cv, and item_index.
 
@@ -85,33 +114,6 @@ def setup_iterative_session_node(state: AppState) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Iterative session setup failed: {str(e)}")
         return {"error_message": f"Failed to setup iterative session: {str(e)}"}
-
-
-def parse_cv_node(state: AppState) -> Dict[str, Any]:
-    """Parse the raw CV text into structured format."""
-    logger.info("Starting CV parsing node")
-
-    if "raw_cv_text" not in state:
-        logger.error("raw_cv_text key not found in state")
-        return {
-            "error_message": "Failed to parse CV: raw_cv_text key not found in state"
-        }
-
-    try:
-        chain = create_cv_parsing_chain()
-        result = chain.invoke({"cv_text": state["raw_cv_text"]})
-
-        logger.info(
-            f"CV parsing successful. Candidate: {result.personal_info['name'] if result.personal_info and 'name' in result.personal_info else 'Unknown'}"
-        )
-        return {"structured_cv": result, "current_step": "cv_parsed"}
-    except Exception as e:
-        logger.error(f"CV parsing failed: {str(e)}")
-        return {
-            "error_message": f"CV parsing failed: {str(e)}. Please check the CV format and try again.",
-            "human_review_required": True,
-            "current_step": "cv_parsing_failed",
-        }
 
 
 def generate_key_qualifications_node(state: AppState) -> Dict[str, Any]:
@@ -161,17 +163,17 @@ def generate_key_qualifications_node(state: AppState) -> Dict[str, Any]:
         }
 
         chain = create_key_qualifications_chain()
-        
+
         # Include human feedback if this is a regeneration
         chain_input = {
             "job_requirements": str(job_requirements),
             "current_skills": str(current_skills),
         }
-        
+
         if state.get("human_approved") == False and state.get("human_feedback"):
             chain_input["human_feedback"] = state["human_feedback"]
             logger.info(f"Including human feedback in regeneration: {state['human_feedback'][:100]}...")
-        
+
         result = chain.invoke(chain_input)
 
         # LIVING DOCUMENT PATTERN: Add qualifications directly to tailored_cv
@@ -330,7 +332,7 @@ def tailor_experience_node(state: AppState) -> Dict[str, Any]:
                 # This is first-time generation - append the new entry
                 new_entries = experience_section.entries + [tailored_entry]
                 logger.info(f"Appending new entry at index {current_index}")
-            
+
             new_experience_section = Section(name="Experience", entries=new_entries)
 
         # Create new StructuredCV with updated sections
@@ -536,17 +538,17 @@ def generate_executive_summary_node(state: AppState) -> Dict[str, Any]:
         }
 
         chain = create_executive_summary_chain()
-        
+
         # Include human feedback if this is a regeneration
         chain_input = {
             "job_description": state["raw_job_description"],
             "enriched_cv": str(complete_cv_context),  # Pass the complete enriched CV
         }
-        
+
         if state.get("human_approved") == False and state.get("human_feedback"):
             chain_input["human_feedback"] = state["human_feedback"]
             logger.info(f"Including human feedback in summary regeneration: {state['human_feedback'][:100]}...")
-        
+
         result = chain.invoke(chain_input)
 
         # LIVING DOCUMENT PATTERN: Add executive summary directly to tailored_cv
@@ -571,7 +573,7 @@ def generate_executive_summary_node(state: AppState) -> Dict[str, Any]:
             f"Executive summary generation successful. Summary length: {len(result.summary)} characters. Added to tailored_cv."
         )
         return {
-            "tailored_cv": final_cv, 
+            "tailored_cv": final_cv,
             "current_step": "awaiting_summary_review",
             "human_approved": None,  # Clear the approval flag
             "human_feedback": None,  # Clear the feedback
