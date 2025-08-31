@@ -122,7 +122,7 @@ Maintain truthfulness while optimizing for relevance and coherence with qualific
 """
 
 PROJECTS_TAILORING_PROMPT = """
-You are an expert CV writer. Tailor the candidate's projects section for this specific job using their qualifications and tailored experience as context.
+You are an expert CV writer. Tailor this single project entry for the specific job using the candidate's key qualifications as context.
 
 Target Job:
 {job_description}
@@ -130,25 +130,25 @@ Target Job:
 Candidate's Key Qualifications (for context):
 {key_qualifications}
 
-Candidate's Tailored Experience (for context):
-{tailored_experience}
+Current Project Entry to Tailor:
+{current_entry}
 
-Candidate's Projects:
-{current_projects}
+For this project entry:
+1. Highlight technologies and skills that match job requirements and align with the key qualifications
+2. Emphasize outcomes and impact that demonstrate relevant capabilities
+3. Connect project work to job responsibilities and requirements
+4. Use technical keywords from the job description and qualifications
+5. Remove or de-emphasize irrelevant details
+6. Ensure consistency with the established key qualifications
 
-For each relevant project:
-1. Highlight technologies and skills that match job requirements and complement the qualifications and experience
-2. Emphasize outcomes and impact that reinforce the established narrative
-3. Connect project work to job responsibilities and demonstrated experience
-4. Use technical keywords from the job description, qualifications, and experience
-5. Focus on the most relevant 3-4 projects that strengthen the overall profile
-6. Ensure consistency with qualifications and experience sections
+Return the tailored entry as a CVEntry object with:
+- title: Project title
+- subtitle: Organization/context (if applicable)
+- date_range: Project timeframe
+- details: List of tailored bullet points highlighting relevant achievements
+- tags: List of relevant technologies/skills
 
-Return the tailored sections as Section objects with:
-- name: MUST be exactly "Projects" (standardized section name)
-- entries: List of CVEntry objects with title, subtitle, date_range, details (list of strings), and tags (list of strings)
-
-Provide tailored project descriptions that create a cohesive, compelling narrative.
+Maintain truthfulness while optimizing for relevance and coherence with qualifications.
 """
 
 CV_PARSING_PROMPT = """You are an expert CV parser. Extract information from the CV text and return ONLY a valid JSON object.
@@ -203,3 +203,27 @@ CV Text to parse:
 {cv_text}
 
 Return the JSON object:"""
+
+SECTION_MAPPING_PROMPT = """
+You are an expert CV analyst tasked with mapping ambiguous sections to standardized concepts.
+Analyze the following CV, provided as a JSON object. Your goal is to identify which section index corresponds to the concepts of "executive summary" and "qualifications".
+
+The CV JSON object:
+{source_cv_json}
+
+**Instructions:**
+1.  **Executive Summary:** Find the section that acts as a professional summary, profile, or objective. This is usually a short, paragraph-style section near the top of the CV.
+2.  **Qualifications/Skills:** Find the section that lists the candidate's skills, technologies, or core competencies. It might be called "Skills", "Technical Skills", "Key Qualifications", etc.
+3.  **Determine the Index:** Identify the 0-based index of these sections within the main `sections` array of the JSON.
+4.  **Return JSON:** You MUST return ONLY a single, valid JSON object with the following keys:
+    - `executive_summary_source_index`: The integer index of the summary/profile section. If no such section is found, the value must be `null`.
+    - `qualifications_source_index`: The integer index of the skills/qualifications section. If no such section is found, the value must be `null`.
+
+**Example Output:**
+{{
+  "executive_summary_source_index": 0,
+  "qualifications_source_index": 4
+}}
+
+**CRITICAL:** Do not include any explanations, markdown, or any text outside of the single JSON object in your response.
+"""

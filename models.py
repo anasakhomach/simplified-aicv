@@ -73,3 +73,15 @@ class StructuredCV(BaseModel):
 
 # Note: Output models removed - using living document pattern
 # All generated content is directly added to StructuredCV sections
+
+
+class SectionMap(BaseModel):
+    """A map to identify the indices of key sections in the source CV."""
+    executive_summary_source_index: Optional[int] = Field(default=None, description="The index of the section in source_cv.sections that corresponds to the executive summary/profile.")
+    qualifications_source_index: Optional[int] = Field(default=None, description="The index of the section in source_cv.sections that corresponds to the skills/qualifications.")
+    # We can add more here later if needed
+    #experience_source_index: Optional[int] = Field(default=None, description="The index of the section in source_cv.sections that corresponds to the experience.")
+    #projects_source_index: Optional[int] = Field(default=None, description="The index of the section in source_cv.sections that corresponds to the projects.")
+    #education_source_index: Optional[int] = Field(default=None, description="The index of the section in source_cv.sections that corresponds to the education.")
+    #certifications_source_index: Optional[int] = Field(default=None, description="The index of the section in source_cv.sections that corresponds to the certifications.")
+    #other_source_index: Optional[int] = Field(default=None, description="The index of the section in source_cv.sections that corresponds to other sections.")

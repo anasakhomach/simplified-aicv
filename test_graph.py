@@ -15,10 +15,7 @@ def base_app_state() -> AppState:
         "current_step": "parse_cv",
         "cv_text": "Sample CV text",
         "job_description": "Sample job description",
-        "structured_cv": StructuredCV(
-            personal_info={"name": "John Doe"},
-            sections=[]
-        ),
+
         "source_cv": StructuredCV(
             personal_info={"name": "John Doe"},
             sections=[]
@@ -27,7 +24,7 @@ def base_app_state() -> AppState:
             personal_info={"name": "John Doe"},
             sections=[]
         ),
-        "item_index": 0,
+        "experience_index": 0,
         "human_review_required": False,
         "human_feedback": "",
         "review_content": ""
@@ -55,9 +52,15 @@ class TestWorkflowRouter:
         result = workflow_router(base_app_state)
         assert result == "setup_iterative_session"
     
-    def test_router_iterative_session_ready_to_generate_qualifications(self, base_app_state):
-        """Test routing from iterative session ready to generate qualifications."""
+    def test_router_iterative_session_ready_to_map_source_sections(self, base_app_state):
+        """Test routing from iterative session ready to map source sections."""
         base_app_state["current_step"] = "iterative_session_ready"
+        result = workflow_router(base_app_state)
+        assert result == "map_source_sections"
+    
+    def test_router_sections_mapped_to_generate_qualifications(self, base_app_state):
+        """Test routing from sections mapped to generate qualifications."""
+        base_app_state["current_step"] = "sections_mapped"
         result = workflow_router(base_app_state)
         assert result == "generate_qualifications"
     
@@ -86,20 +89,32 @@ class TestWorkflowRouter:
         assert result == "tailor_experience"
     
     def test_router_experience_tailoring_complete_to_tailor_projects(self, base_app_state):
-        """Test routing from experience tailoring complete to tailor projects."""
+        """Test routing from experience tailoring complete to tailor project entry."""
         base_app_state["current_step"] = "experience_tailoring_complete"
         result = workflow_router(base_app_state)
-        assert result == "tailor_projects"
+        assert result == "tailor_project_entry"
     
     def test_router_start_projects_tailoring_to_tailor_projects(self, base_app_state):
-        """Test routing from start projects tailoring to tailor projects."""
+        """Test routing from start projects tailoring to tailor project entry."""
         base_app_state["current_step"] = "start_projects_tailoring"
         result = workflow_router(base_app_state)
-        assert result == "tailor_projects"
+        assert result == "tailor_project_entry"
     
-    def test_router_projects_approved_to_generate_summary(self, base_app_state):
-        """Test routing from projects approved to generate summary."""
-        base_app_state["current_step"] = "projects_approved"
+    def test_router_project_entry_tailored_to_should_continue(self, base_app_state):
+        """Test routing from project entry tailored to should continue projects."""
+        base_app_state["current_step"] = "project_entry_tailored"
+        result = workflow_router(base_app_state)
+        assert result == "should_continue_projects"
+    
+    def test_router_continue_projects_tailoring_to_tailor_project_entry(self, base_app_state):
+        """Test routing from continue projects tailoring to tailor project entry."""
+        base_app_state["current_step"] = "continue_projects_tailoring"
+        result = workflow_router(base_app_state)
+        assert result == "tailor_project_entry"
+    
+    def test_router_projects_tailoring_complete_to_generate_summary(self, base_app_state):
+        """Test routing from projects tailoring complete to generate summary."""
+        base_app_state["current_step"] = "projects_tailoring_complete"
         result = workflow_router(base_app_state)
         assert result == "generate_summary"
     
@@ -251,12 +266,14 @@ class TestCreateCVGenerationGraph:
             "parse_job_description",
             "parse_cv",
             "setup_iterative_session",
+            "map_source_sections",
             "generate_qualifications",
             "human_review",
             "generate_summary",
             "tailor_experience",
             "should_continue_experience",
-            "tailor_projects",
+            "tailor_project_entry",
+            "should_continue_projects",
             "finalize_cv",
             "router"
         ]

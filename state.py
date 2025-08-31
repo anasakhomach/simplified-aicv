@@ -7,7 +7,7 @@ and end of all state in the application.
 
 from typing import TypedDict
 from typing_extensions import NotRequired
-from models import JobDescriptionData, StructuredCV
+from models import JobDescriptionData, StructuredCV, SectionMap
 
 
 class AppState(TypedDict):
@@ -23,12 +23,13 @@ class AppState(TypedDict):
 
     # Parsed Pydantic objects
     job_description_data: NotRequired[JobDescriptionData]
-    structured_cv: NotRequired[StructuredCV]  # Transient key for passing parsed CV
+    section_map: NotRequired[SectionMap]
 
     # Iterative processing state (workbench model)
     source_cv: NotRequired[StructuredCV]      # Read-only original CV
     tailored_cv: NotRequired[StructuredCV]     # Work-in-progress "living document"
-    item_index: NotRequired[int]               # Current item for iterative review
+    experience_index: NotRequired[int]           # Current experience entry for iterative review
+    project_index: NotRequired[int]            # Current project for iterative review
 
     # Final output
     final_cv: NotRequired[StructuredCV]
@@ -66,5 +67,5 @@ def get_initial_state() -> AppState:
         "raw_job_description": default_jd,
         "current_step": "input",
         "human_review_required": False,
-        "item_index": 0
+        "experience_index": 0
     }

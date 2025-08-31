@@ -20,7 +20,8 @@ from models import (
     JobDescriptionData,
     StructuredCV,
     Section,
-    CVEntry
+    CVEntry,
+    SectionMap
 )
 from prompts import (
     JOB_DESCRIPTION_PARSING_PROMPT,
@@ -29,6 +30,7 @@ from prompts import (
     EXPERIENCE_TAILORING_PROMPT,
     PROJECTS_TAILORING_PROMPT,
     CV_PARSING_PROMPT,
+    SECTION_MAPPING_PROMPT,
 )
 
 
@@ -212,7 +214,7 @@ def create_projects_tailoring_chain():
     """Create a chain to tailor projects section."""
     return _create_structured_output_chain(
         prompt_template=PROJECTS_TAILORING_PROMPT,
-        output_schema=TailoringOutput,
+        output_schema=TailoredEntryOutput,
         chain_name="Projects Tailoring"
     )
 
@@ -239,4 +241,12 @@ def create_executive_summary_chain():
         output_schema=SummaryOutput,
         chain_name="Executive Summary",
         input_preprocessor=prepare_inputs
+    )
+
+def create_section_mapping_chain():
+    """Create a chain to map CV sections to standardized concepts."""
+    return _create_structured_output_chain(
+        prompt_template=SECTION_MAPPING_PROMPT,
+        output_schema=SectionMap,
+        chain_name="Section Mapping"
     )

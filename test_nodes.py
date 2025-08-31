@@ -10,7 +10,8 @@ from nodes import (
     generate_executive_summary_node,
     tailor_experience_node,
     should_continue_experience_node,
-    tailor_projects_node,
+    tailor_project_entry_node,
+    should_continue_projects_node,
     finalize_cv_node,
     request_human_review_node
 )
@@ -34,7 +35,7 @@ def sample_app_state() -> AppState:
             experience_level=ExperienceLevel.MID,
             experience_requirements=["3+ years Python experience"]
         ),
-        "structured_cv": StructuredCV(
+        "tailored_cv": StructuredCV(
             personal_info={"name": "John Doe", "title": "Software Engineer"},
             sections=[]
         ),
@@ -46,7 +47,7 @@ def sample_app_state() -> AppState:
             personal_info={"name": "John Doe", "title": "Software Engineer"},
             sections=[]
         ),
-        "item_index": 0,
+        "experience_index": 0,
         "human_review_required": False,
         "human_feedback": ""
     }
@@ -153,21 +154,14 @@ def mock_experience_tailoring_chain(monkeypatch):
 def mock_projects_tailoring_chain(monkeypatch):
     """Mock the projects tailoring chain."""
     mock_chain = Mock()
-    mock_chain.invoke.return_value = TailoringOutput(
-        tailored_sections=[
-            Section(
-                name="Projects",
-                entries=[
-                    CVEntry(
-                        title="E-commerce Platform",
-                        subtitle="Personal Project",
-                        date_range="2022",
-                        details=["Built using Python and Django"],
-                        tags=["Python", "Django", "E-commerce"]
-                    )
-                ]
-            )
-        ]
+    mock_chain.invoke.return_value = TailoredEntryOutput(
+        tailored_entry=CVEntry(
+            title="E-commerce Platform",
+            subtitle="Personal Project",
+            date_range="2022",
+            details=["Built using Python and Django"],
+            tags=["Python", "Django", "E-commerce"]
+        )
     )
     
     def mock_create_projects_tailoring_chain():
@@ -190,15 +184,14 @@ class TestParseCV:
         })
         
         # Verify result structure
-        assert "structured_cv" in result
-        assert "current_step" in result
+        assert "tailored_cv" in result
         assert result["current_step"] == "cv_parsed"
         
-        # Verify structured_cv was updated
-        structured_cv = result["structured_cv"]
-        assert structured_cv.personal_info["name"] == "John Doe"
-        assert len(structured_cv.sections) == 1
-        assert structured_cv.sections[0].name == "Experience"
+        # Verify tailored_cv was updated
+        tailored_cv = result["tailored_cv"]
+        assert tailored_cv.personal_info["name"] == "John Doe"
+        assert len(tailored_cv.sections) == 1
+        assert tailored_cv.sections[0].name == "Experience"
 
 
 class TestGenerateQualifications:
@@ -304,7 +297,7 @@ class TestTailorExperience:
                 Section(name="Experience", entries=[])
             ]
         )
-        sample_app_state["item_index"] = 0
+        sample_app_state["experience_index"] = 0
         
         result = tailor_experience_node(sample_app_state)
         
@@ -317,7 +310,7 @@ class TestTailorExperience:
         assert "tailored_cv" in result
         assert "current_step" in result
         assert result["current_step"] == "experience_entry_tailored"
-        # item_index is no longer returned by tailor_experience_node (conceptual fix #3)
+        # experience_index is no longer returned by tailor_experience_node (conceptual fix #3)
         
         # Verify tailored entry was added
         tailored_cv = result["tailored_cv"]
@@ -344,7 +337,7 @@ class TestTailorExperience:
             personal_info=sample_app_state["tailored_cv"].personal_info,
             sections=[]
         )
-        sample_app_state["item_index"] = 0
+        sample_app_state["experience_index"] = 0
         
         result = tailor_experience_node(sample_app_state)
         
@@ -384,7 +377,7 @@ class TestTailorExperience:
             personal_info=sample_app_state["tailored_cv"].personal_info,
             sections=[]  # No Experience section initially
         )
-        sample_app_state["item_index"] = 0
+        sample_app_state["experience_index"] = 0
         
         result = tailor_experience_node(sample_app_state)
         
@@ -417,7 +410,7 @@ class TestShouldContinueExperience:
                 )
             ]
         )
-        sample_app_state["item_index"] = 1  # Still one more entry to process
+        sample_app_state["experience_index"] = 1  # Still one more entry to process
         
         result = should_continue_experience_node(sample_app_state)
         
@@ -438,7 +431,7 @@ class TestShouldContinueExperience:
                 )
             ]
         )
-        sample_app_state["item_index"] = 1  # All entries processed
+        sample_app_state["experience_index"] = 1  # All entries processed
         
         result = should_continue_experience_node(sample_app_state)
     # Verify result indicates completion
@@ -452,7 +445,7 @@ class TestShouldContinueExperience:
             personal_info={"name": "John Doe"},
             sections=[]
         )
-        sample_app_state["item_index"] = 0
+        sample_app_state["experience_index"] = 0
         
         result = should_continue_experience_node(sample_app_state)
         
@@ -461,7 +454,7 @@ class TestShouldContinueExperience:
 
 
 class TestTailorProjects:
-    """Test the tailor_projects_node function."""
+    """Test the tailor_project_entry_node function."""
     
     def test_tailor_projects_success(self, sample_app_state, mock_projects_tailoring_chain):
         """Test successful projects tailoring."""
@@ -487,7 +480,24 @@ class TestTailorProjects:
             )
         ]
         
-        result = tailor_projects_node(sample_app_state)
+        # Initialize project_index to 0 for first iteration
+        sample_app_state["project_index"] = 0
+        # Ensure user_intent is not "skip" so chain gets called
+        sample_app_state["user_intent"] = "tailor"
+        # Set up source_cv with projects
+        sample_app_state["source_cv"] = StructuredCV(
+            personal_info=sample_app_state["tailored_cv"].personal_info,
+            sections=[
+                Section(
+                    name="Projects",
+                    entries=[
+                        CVEntry(title="Test Project", subtitle="", date_range="", details=[], tags=[]),
+                    ]
+                )
+            ]
+        )
+        
+        result = tailor_project_entry_node(sample_app_state)
         
         # Verify chain was called
         mock_projects_tailoring_chain.invoke.assert_called_once()
@@ -495,7 +505,7 @@ class TestTailorProjects:
         # Verify result structure
         assert "tailored_cv" in result
         assert "current_step" in result
-        assert result["current_step"] == "awaiting_projects_review"
+        assert result["current_step"] == "project_entry_tailored"
         
         # Verify projects section was updated
         tailored_cv = result["tailored_cv"]
@@ -515,13 +525,13 @@ class TestTailorProjects:
             )
         ]
         
-        result = tailor_projects_node(sample_app_state)
+        result = tailor_project_entry_node(sample_app_state)
         
         # Verify chain was not called
         mock_projects_tailoring_chain.invoke.assert_not_called()
         
         # Verify result indicates completion
-        assert result["current_step"] == "projects_tailored"
+        assert result["current_step"] == "projects_tailoring_complete"
     
     def test_tailor_projects_creates_missing_section(self, sample_app_state, mock_projects_tailoring_chain):
         """Test projects tailoring creates Projects section when missing."""
@@ -556,7 +566,24 @@ class TestTailorProjects:
         # Add Projects back to simulate source having it
         sample_app_state["tailored_cv"].sections = original_sections
         
-        result = tailor_projects_node(sample_app_state)
+        # Initialize project_index to 0 for first iteration
+        sample_app_state["project_index"] = 0
+        # Ensure user_intent is not "skip" so chain gets called
+        sample_app_state["user_intent"] = "tailor"
+        # Set up source_cv with projects
+        sample_app_state["source_cv"] = StructuredCV(
+            personal_info=sample_app_state["tailored_cv"].personal_info,
+            sections=[
+                Section(
+                    name="Projects",
+                    entries=[
+                        CVEntry(title="Test Project", subtitle="", date_range="", details=[], tags=[]),
+                    ]
+                )
+            ]
+        )
+
+        result = tailor_project_entry_node(sample_app_state)
         
         # Verify chain was called
         mock_projects_tailoring_chain.invoke.assert_called_once()
@@ -566,6 +593,73 @@ class TestTailorProjects:
         projects_section = next((s for s in tailored_cv.sections if s.name == "Projects"), None)
         assert projects_section is not None
         assert "E-commerce Platform" in projects_section.entries[0].title
+
+
+class TestShouldContinueProjects:
+    """Test the should_continue_projects_node function."""
+    
+    def test_should_continue_more_entries(self, sample_app_state):
+        """Test should continue when there are more project entries to process."""
+        # Set up state with multiple projects in source_cv
+        sample_app_state["project_index"] = 0
+        sample_app_state["source_cv"] = StructuredCV(
+            personal_info=sample_app_state["tailored_cv"].personal_info,
+            sections=[
+                Section(
+                    name="Projects",
+                    entries=[
+                        CVEntry(title="Project 1", subtitle="", date_range="", details=[], tags=[]),
+                        CVEntry(title="Project 2", subtitle="", date_range="", details=[], tags=[]),
+                        CVEntry(title="Project 3", subtitle="", date_range="", details=[], tags=[]),
+                    ]
+                )
+            ]
+        )
+        
+        result = should_continue_projects_node(sample_app_state)
+        
+        # Should continue to next project
+        assert result["current_step"] == "awaiting_project_review"
+        assert result["project_index"] == 0  # Should remain at current index
+    
+    def test_should_continue_no_more_entries(self, sample_app_state):
+        """Test should not continue when all project entries are processed."""
+        # Set up state where we've processed all projects
+        sample_app_state["project_index"] = 3  # Index beyond the last entry
+        sample_app_state["source_cv"] = StructuredCV(
+            personal_info=sample_app_state["tailored_cv"].personal_info,
+            sections=[
+                Section(
+                    name="Projects",
+                    entries=[
+                        CVEntry(title="Project 1", subtitle="", date_range="", details=[], tags=[]),
+                        CVEntry(title="Project 2", subtitle="", date_range="", details=[], tags=[]),
+                        CVEntry(title="Project 3", subtitle="", date_range="", details=[], tags=[]),
+                    ]
+                )
+            ]
+        )
+        
+        result = should_continue_projects_node(sample_app_state)
+        
+        # Should move to summary generation
+        assert result["current_step"] == "start_summary_generation"
+        assert "project_index" not in result  # Should not increment
+    
+    def test_should_continue_no_projects(self, sample_app_state):
+        """Test should not continue when there are no projects."""
+        # Set up state with no projects
+        sample_app_state["project_index"] = 0
+        sample_app_state["source_cv"] = StructuredCV(
+            personal_info=sample_app_state["tailored_cv"].personal_info,
+            sections=[]  # No Projects section
+        )
+        
+        result = should_continue_projects_node(sample_app_state)
+        
+        # Should move to summary generation
+        assert result["current_step"] == "start_summary_generation"
+        assert "project_index" not in result
 
 
 class TestFinalizeCV:
