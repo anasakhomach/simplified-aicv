@@ -91,3 +91,6 @@ prompts/
 
 # Streamlit secrets (contains sensitive information)
 .streamlit/secrets.toml
+
+# Reports and logs
+report.md
