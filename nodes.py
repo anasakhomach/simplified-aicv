@@ -18,6 +18,7 @@ from chains import (
     create_projects_tailoring_chain,
     create_section_mapping_chain,
 )
+from models import StructuredCV, Section
 from state import AppState
 
 # Configure logging
@@ -668,21 +669,50 @@ def generate_executive_summary_node(state: AppState) -> Dict[str, Any]:
         }
 
 
-def finalize_cv_node(state: AppState) -> Dict[str, Any]:
-    """Finalize the CV generation process.
-
-    LIVING DOCUMENT PATTERN: The tailored_cv is already complete with:
-    - Executive Summary (added by generate_executive_summary_node)
-    - Key Qualifications (added by generate_key_qualifications_node)
-    - Tailored Experience (updated by tailor_experience_node)
-    - Tailored Projects (updated by tailor_project_entry_node)
+def finalize_cv_node(state: AppState) -> dict:
+    """
+    Finalize the CV by intelligently merging the tailored sections with the
+    static sections from the source CV, preserving the original order.
     """
     logger.info("Starting CV finalization node")
     try:
-        # The tailored_cv is already the complete, enriched document
-        final_cv = state["tailored_cv"]
+        source_cv = state["source_cv"]
+        tailored_cv = state["tailored_cv"]
 
-        logger.info("CV finalization successful - tailored_cv is complete")
+        # Create a dictionary of the AI-generated/tailored sections for easy access
+        tailored_sections = {s.name: s for s in tailored_cv.sections}
+
+        # Build the sections list
+        final_sections = []
+
+        # Add the new, high-value sections first, in the desired order
+        if "Executive Summary" in tailored_sections:
+            final_sections.append(tailored_sections["Executive Summary"])
+        if "Key Qualifications" in tailored_sections:
+            final_sections.append(tailored_sections["Key Qualifications"])
+
+        # Now, iterate through the original sections to add the rest in order
+        for section in source_cv.sections:
+            # FIRST, check if this is the old skills section and skip it
+            if "skills" in section.name.lower():
+                logger.info(f"Skipping original '{section.name}' section.")
+                continue
+
+            # NEXT, check if a tailored version of this section exists
+            if section.name in tailored_sections:
+                # Use the tailored version, but only if it hasn't been added already
+                # (Summary and Quals are added before the loop)
+                if section.name not in ["Key Qualifications", "Executive Summary"]:
+                    final_sections.append(tailored_sections[section.name])
+
+            # FINALLY, if it's a static section, add the original
+            else:
+                final_sections.append(section)
+
+        # Create the final CV with the complete sections list
+        final_cv = StructuredCV(personal_info=source_cv.personal_info, sections=final_sections)
+
+        logger.info("CV finalization successful - final_cv composed intelligently.")
         return {
             "final_cv": final_cv,
             "current_step": "cv_finalized",

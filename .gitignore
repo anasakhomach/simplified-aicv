@@ -60,8 +60,7 @@ chat-*.txt
 !requirements.txt
 !test-cv.txt
 !test-jd.txt
-!terminal-output.txt
-!changelog.txt
+
 
 # Coverage reports
 .coverage

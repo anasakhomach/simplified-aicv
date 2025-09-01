@@ -47,6 +47,28 @@ st.set_page_config(
 STATE_KEY = "app_state"
 PERSISTENCE_KEY = "cv_generation_session"
 
+# --- Workflow Progress Milestones ---
+WORKFLOW_MILESTONES = {
+    "input": 0,
+    "job_description_parsed": 5,
+    "cv_parsed": 10,
+    "iterative_session_ready": 15,
+    "source_sections_mapped": 20,
+    "awaiting_qualifications_review": 30,
+    "qualifications_approved": 35,
+    "start_experience_tailoring": 40,
+    "awaiting_experience_review": 50,
+    "experience_tailoring_complete": 60,
+    "start_projects_tailoring": 65,
+    "awaiting_project_review": 75,
+    "projects_tailoring_complete": 85,
+    "start_summary_generation": 90,
+    "awaiting_summary_review": 95,
+    "summary_approved": 98,
+    "start_cv_finalization": 99,
+    "cv_finalized": 100,
+}
+
 def initialize_session_state() -> None:
     """Initialize session state with default AppState if not exists."""
     if STATE_KEY not in st.session_state:
@@ -116,30 +138,21 @@ def render_sidebar() -> None:
         st.divider()
 
         # Progress tracking
-        state = get_app_state()
         st.header("📊 Progress")
 
-        def _has_section(state, section_type):
-            """Check if tailored_cv has a section of the given type."""
-            cv_data = state.get("tailored_cv")
-            if not cv_data or not hasattr(cv_data, 'sections'):
-                return False
-            return any(section_type.lower() in section.name.lower() for section in cv_data.sections)
+        state = get_app_state()
+        current_step = state.get("current_step", "input")
 
-        progress_items = [
-            ("Job Description Parsed", bool(state.get("job_description_data"))),
-            ("CV Parsed", bool(state.get("tailored_cv"))),
-            ("Qualifications Generated", _has_section(state, "qualifications")),
-            ("Human Review Complete", not state.get("human_review_required", False)),
-            ("Experience Tailored", _has_section(state, "experience")),
-            ("Projects Tailored", _has_section(state, "project")),
-            ("Executive Summary", _has_section(state, "summary")),
-            ("CV Finalized", bool(state.get("final_cv")))
-        ]
+        # Get progress percentage from milestones, default to 0 if not found
+        progress_percent = WORKFLOW_MILESTONES.get(current_step, 0)
 
-        for item, completed in progress_items:
-            icon = "✅" if completed else "⏳"
-            st.write(f"{icon} {item}")
+        # Display progress bar (st.progress expects a value between 0.0 and 1.0)
+        st.progress(progress_percent / 100)
+
+        # Display current step name, formatted nicely
+        st.markdown(f"**Current Step:** {current_step.replace('_', ' ').title()}")
+
+        st.divider()  # Add a divider for visual separation
 
         # Error display
         if state.get("has_error"):
@@ -187,6 +200,73 @@ def render_input_section() -> None:
             update_app_state(state)
 ## End of Input Section Rendering. ==================================
 
+def _start_initial_workflow(state: AppState) -> None:
+    """Helper function to orchestrate initial workflow steps with granular UI feedback.
+    
+    This function breaks down the background processing into explicit steps:
+    1. Parse job description
+    2. Parse CV
+    3. Setup iterative session
+    4. Map source sections
+    
+    Each step gets its own spinner and progress update for responsive UI.
+    """
+    try:
+        current_state = state
+        
+        # Step 1: Parse Job Description
+        with st.spinner("📋 Parsing job description..."):
+            logger.info("Starting job description parsing")
+            current_state = run_graph_step(current_state)
+            update_app_state(current_state)
+            
+        # Check for errors after JD parsing
+        if current_state.get("error_message"):
+            st.error(f"❌ Job description parsing failed: {current_state['error_message']}")
+            return
+            
+        # Step 2: Parse CV
+        with st.spinner("📄 Parsing CV content..."):
+            logger.info("Starting CV parsing")
+            current_state = run_graph_step(current_state)
+            update_app_state(current_state)
+            
+        # Check for errors after CV parsing
+        if current_state.get("error_message"):
+            st.error(f"❌ CV parsing failed: {current_state['error_message']}")
+            return
+            
+        # Step 3: Setup Iterative Session
+        with st.spinner("⚙️ Setting up iterative session..."):
+            logger.info("Starting iterative session setup")
+            current_state = run_graph_step(current_state)
+            update_app_state(current_state)
+            
+        # Check for errors after session setup
+        if current_state.get("error_message"):
+            st.error(f"❌ Session setup failed: {current_state['error_message']}")
+            return
+            
+        # Step 4: Map Source Sections
+        with st.spinner("🗺️ Mapping source sections..."):
+            logger.info("Starting source section mapping")
+            current_state = run_graph_step(current_state)
+            update_app_state(current_state)
+            
+        # Check for errors after section mapping
+        if current_state.get("error_message"):
+            st.error(f"❌ Section mapping failed: {current_state['error_message']}")
+            return
+            
+        logger.info("Initial workflow steps completed successfully")
+        # Final rerun to refresh the UI with the completed initial steps
+        st.rerun()
+        
+    except Exception as e:
+        logger.error(f"Initial workflow failed: {str(e)}")
+        st.error(f"❌ Initial processing failed: {str(e)}")
+
+
 def render_workflow_controls() -> None:
     """Render workflow control buttons."""
     st.header("🚀 Generate Tailored CV")
@@ -220,17 +300,8 @@ def render_workflow_controls() -> None:
         help=button_help
     ):
         logger.info("User clicked Generate Tailored CV button")
-        with st.spinner("🤖 AI is analyzing and tailoring your CV..."):
-            try:
-                logger.info("Starting CV generation workflow")
-                # Run one step of the graph
-                new_state = run_graph_step(state)
-                update_app_state(new_state)
-                logger.info("CV generation step completed successfully")
-                st.rerun()
-            except Exception as e:
-                logger.error(f"CV generation failed: {str(e)}")
-                st.error(f"❌ Processing failed: {str(e)}")
+        # Use the new granular workflow function
+        _start_initial_workflow(state)
 
 def render_approval_buttons(state: AppState, section_name: str, next_step: str) -> None:
     """Render approval buttons for a specific section."""
@@ -312,9 +383,8 @@ def render_section_review_ui(current_step: str) -> None:
 
 # render_approval_buttons function moved to individual UI component files
 
-def render_results_section() -> None:
+def render_results_section(state: AppState, current_step: str) -> None:
     """Render the results and output section."""
-    state = get_app_state()
 
     # Show final CV if available
     if state.get("final_cv"):
@@ -327,21 +397,47 @@ def render_results_section() -> None:
             with st.expander("Click to view your complete tailored CV", expanded=True):
                 final_cv = state["final_cv"]
                 if isinstance(final_cv, StructuredCV):
-                    # Render structured CV
+                    # Render personal info at the top
+                    if final_cv.personal_info:
+                        st.header(final_cv.personal_info.get("name", ""))
+
+                        # Display contact info in a single line
+                        contact_parts = []
+                        if final_cv.personal_info.get("email"):
+                            contact_parts.append(final_cv.personal_info["email"])
+                        if final_cv.personal_info.get("phone"):
+                            contact_parts.append(final_cv.personal_info["phone"])
+                        if final_cv.personal_info.get("linkedin"):
+                            contact_parts.append(final_cv.personal_info["linkedin"])
+                        
+                        if contact_parts:
+                            contact_line = " | ".join(contact_parts)
+                            st.markdown(f"**{contact_line}**")
+
+                        st.divider()
+
+                    # Render structured CV sections
                     for section in final_cv.sections:
-                        st.markdown(f"### {section.name}")
-                        for entry in section.entries:
-                            if entry.title:
-                                st.markdown(f"**{entry.title}**")
-                            if entry.subtitle:
-                                st.markdown(f"*{entry.subtitle}*")
-                            if entry.date_range:
-                                st.markdown(f"_{entry.date_range}_")
-                            for detail in entry.details:
-                                st.markdown(f"- {detail}")
-                            if entry.tags:
-                                st.markdown(f"**Skills:** `{', '.join(entry.tags)}`")
-                            st.markdown("---")
+                        if section.name == "Key Qualifications":
+                            st.markdown(f"### {section.name}")
+                            qualification_titles = [entry.title for entry in section.entries]
+                            st.markdown("- " + "\n- ".join(qualification_titles))
+                            st.markdown("---") # Add a separator
+                        else:
+                            # This is the existing generic rendering logic for other sections
+                            st.markdown(f"### {section.name}")
+                            for entry in section.entries:
+                                if entry.title and entry.title.lower() != section.name.lower():
+                                    st.markdown(f"**{entry.title}**")
+                                if entry.subtitle:
+                                    st.markdown(f"*{entry.subtitle}*")
+                                if entry.date_range:
+                                    st.markdown(f"_{entry.date_range}_")
+                                for detail in entry.details:
+                                    st.markdown(f"- {detail}")
+                                if entry.tags:
+                                    st.markdown(f"**Skills:** `{', '.join(entry.tags)}`")
+                                st.markdown("---")
                         st.markdown("") # Add space between sections
                 else:
                     st.markdown(str(final_cv))
@@ -355,18 +451,26 @@ def render_results_section() -> None:
                 for section in state["final_cv"].sections:
                     cv_text += f"{section.name}\n"
                     cv_text += "=" * len(section.name) + "\n\n"
-                    for entry in section.entries:
-                        if entry.title:
-                            cv_text += f"{entry.title}\n"
-                        if entry.subtitle:
-                            cv_text += f"{entry.subtitle}\n"
-                        if entry.date_range:
-                            cv_text += f"{entry.date_range}\n"
-                        for detail in entry.details:
-                            cv_text += f"• {detail}\n"
-                        if entry.tags:
-                            cv_text += f"Skills: {', '.join(entry.tags)}\n"
+                    if section.name == "Key Qualifications":
+                        # Handle Key Qualifications as a simple bulleted list
+                        for entry in section.entries:
+                            if entry.title:
+                                cv_text += f"• {entry.title}\n"
                         cv_text += "\n"
+                    else:
+                        # Handle other sections with full entry details
+                        for entry in section.entries:
+                            if entry.title:
+                                cv_text += f"{entry.title}\n"
+                            if entry.subtitle:
+                                cv_text += f"{entry.subtitle}\n"
+                            if entry.date_range:
+                                cv_text += f"{entry.date_range}\n"
+                            for detail in entry.details:
+                                cv_text += f"• {detail}\n"
+                            if entry.tags:
+                                cv_text += f"Skills: {', '.join(entry.tags)}\n"
+                            cv_text += "\n"
                     cv_text += "\n"
             else:
                 cv_text = str(state["final_cv"])
@@ -395,12 +499,23 @@ def render_results_section() -> None:
         st.header("📋 Generated Content")
         st.markdown("**Progress:** AI is working on your CV. Generated sections will appear below.")
 
-        # Show all sections from tailored_cv
-        for section in cv_data.sections:
-            with st.container():
-                st.markdown(f"### 🎯 {section.name}")
-                with st.expander(f"View {section.name}", expanded=True):
-                    for entry in section.entries:
+        # Display only the relevant section based on current_step
+        if "qualifications" in current_step:
+            # Find and display Key Qualifications
+            qualifications_section = next((s for s in cv_data.sections if "qualifications" in s.name.lower()), None)
+            if qualifications_section:
+                st.markdown(f"### 🎯 {qualifications_section.name}")
+                with st.expander(f"View {qualifications_section.name}", expanded=True):
+                    for entry in qualifications_section.entries:
+                        if entry.title:
+                            st.markdown(f"• {entry.title}")
+        elif "experience" in current_step:
+            # Find and display Experience section
+            experience_section = next((s for s in cv_data.sections if "experience" in s.name.lower()), None)
+            if experience_section:
+                st.markdown(f"### 🎯 {experience_section.name}")
+                with st.expander(f"View {experience_section.name}", expanded=True):
+                    for entry in experience_section.entries:
                         if entry.title:
                             st.markdown(f"**{entry.title}**")
                         if entry.subtitle:
@@ -412,8 +527,46 @@ def render_results_section() -> None:
                         if entry.tags:
                             st.markdown(f"🏷️ **Tags:** {', '.join(entry.tags)}")
                         st.markdown("---")
+        elif "project" in current_step:
+            # Find and display Projects section
+            project_section = next((s for s in cv_data.sections if "project" in s.name.lower()), None)
+            if project_section:
+                st.markdown(f"### 🎯 {project_section.name}")
+                with st.expander(f"View {project_section.name}", expanded=True):
+                    for entry in project_section.entries:
+                        if entry.title:
+                            st.markdown(f"**{entry.title}**")
+                        if entry.subtitle:
+                            st.markdown(f"*{entry.subtitle}*")
+                        if entry.date_range:
+                            st.markdown(f"📅 {entry.date_range}")
+                        for detail in entry.details:
+                            st.markdown(f"• {detail}")
+                        if entry.tags:
+                            st.markdown(f"🏷️ **Tags:** {', '.join(entry.tags)}")
+                        st.markdown("---")
+        elif "summary" in current_step:
+            # Find and display Executive Summary
+            summary_section = next((s for s in cv_data.sections if "summary" in s.name.lower()), None)
+            if summary_section:
+                st.markdown(f"### 🎯 {summary_section.name}")
+                with st.expander(f"View {summary_section.name}", expanded=True):
+                    for entry in summary_section.entries:
+                        if entry.title:
+                            st.markdown(f"**{entry.title}**")
+                        if entry.subtitle:
+                            st.markdown(f"*{entry.subtitle}*")
+                        if entry.date_range:
+                            st.markdown(f"📅 {entry.date_range}")
+                        for detail in entry.details:
+                            st.markdown(f"• {detail}")
+                        if entry.tags:
+                            st.markdown(f"🏷️ **Tags:** {', '.join(entry.tags)}")
+                        st.markdown("---")
+        else:
+            st.info("💡 Workflow in progress. Content will appear here as it's generated.")
 
-        # Show next steps
+        # The "Next" info message can remain
         if not state.get("human_review_required", False):
             st.info("💡 **Next:** Continue clicking 'Generate Tailored CV' to complete all sections.")
 
@@ -427,16 +580,26 @@ def main() -> None:
     st.markdown("Transform your CV to perfectly match any job description using AI.")
 
     # Render main sections
-    render_sidebar()
-    render_input_section()
+    render_sidebar()  # Sidebar is always visible
 
-    st.divider()
+    state = get_app_state()
+    current_step = state.get("current_step", "input")
 
-    render_workflow_controls()
-
-    st.divider()
-
-    render_results_section()
+    if state.get("final_cv"):
+        # Workflow complete: show only final results
+        render_results_section(state, current_step)
+    elif current_step == "input":
+        # Initial state: show input fields and main generate button
+        render_input_section()
+        st.divider()
+        render_workflow_controls()
+        st.divider()
+        render_results_section(state, current_step)
+    else:
+        # Workflow in progress (not input, not final): show workflow controls and relevant section
+        render_workflow_controls()
+        st.divider()
+        render_results_section(state, current_step)
 
     # Debug section (only in development)
     if st.checkbox("🔧 Show Debug Info"):

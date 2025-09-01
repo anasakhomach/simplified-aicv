@@ -29,8 +29,10 @@ def render_qualifications_review(state: AppState, render_approval_buttons: Calla
                     break
 
             if qualifications_section:
-                for i, entry in enumerate(qualifications_section.entries, 1):
-                    st.markdown(f"• {entry.title}")
+                # Collect all qualification titles into a list
+                qualification_titles = [entry.title for entry in qualifications_section.entries]
+                # Display them as a single markdown bulleted list
+                st.markdown("- " + "\n- ".join(qualification_titles))
             else:
                 st.warning("No qualifications section found in CV.")
         else:
