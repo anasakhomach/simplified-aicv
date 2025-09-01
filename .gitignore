@@ -54,7 +54,6 @@ app.log
 cv_generation_session.json
 
 # Test files
-test-*.txt
 chat-*.txt
 
 
