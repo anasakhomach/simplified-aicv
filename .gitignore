@@ -56,10 +56,6 @@ cv_generation_session.json
 # Test files
 test-*.txt
 chat-*.txt
-*.txt
-!requirements.txt
-!test-cv.txt
-!test-jd.txt
 
 
 # Coverage reports
