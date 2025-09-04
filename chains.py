@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 from models import (
     JobDescriptionData,
@@ -31,6 +31,7 @@ from prompts import (
     PROJECTS_TAILORING_PROMPT,
     CV_PARSING_PROMPT,
     SECTION_MAPPING_PROMPT,
+    LATEX_FIXER_PROMPT
 )
 
 
@@ -250,3 +251,14 @@ def create_section_mapping_chain():
         output_schema=SectionMap,
         chain_name="Section Mapping"
     )
+
+def create_latex_fixer_chain():
+    """Creates a more advanced chain that attempts to fix broken LaTeX code."""
+    prompt = ChatPromptTemplate.from_template(LATEX_FIXER_PROMPT)
+    # We are constrained to the flash model, so the prompt must be very good.
+    llm = ChatGoogleGenerativeAI(
+        model="gemini-2.0-flash",
+        temperature=0.1, # Use low temperature for deterministic fixes
+        max_output_tokens=4096 # Increase token limit for full code
+    )
+    return prompt | llm | StrOutputParser()

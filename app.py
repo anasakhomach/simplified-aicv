@@ -14,14 +14,18 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '.'))
 
 import json
 import logging
+import base64
 import streamlit as st
 from state import AppState, get_initial_state
 from graph import run_graph_step
 from models import StructuredCV
+from pydantic import BaseModel
 from ui_components.render_experience import render_experience_review
 from ui_components.render_projects import render_projects_review
 from ui_components.render_summary import render_summary_review
 from ui_components.render_qualifications import render_qualifications_review
+from latex_generator import generate_latex_string
+from latex_compiler import compile_latex_to_pdf
 
 
 # Configure logging for Streamlit
@@ -34,6 +38,12 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+def render_pdf(pdf_bytes: bytes):
+    """Renders a PDF file in the Streamlit app."""
+    base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
+    pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="1000" type="application/pdf"></iframe>'
+    st.markdown(pdf_display, unsafe_allow_html=True)
 
 # Page configuration
 st.set_page_config(
@@ -94,28 +104,59 @@ def update_app_state(new_state: AppState) -> None:
     logger.info(f"Updating application state. Current step: {new_state.get('current_step', 'unknown')}")
     st.session_state[STATE_KEY] = new_state
 
+def pydantic_encoder(obj):
+    """Custom JSON encoder for Pydantic models."""
+    if isinstance(obj, BaseModel):
+        return obj.model_dump()
+    raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
+
 def save_session_to_json() -> None:
     """Save current session state to JSON for persistence."""
     try:
         state = get_app_state()
+        # Use a custom default function for the encoder that handles Pydantic models
         with open(f"{PERSISTENCE_KEY}.json", "w") as f:
-            json.dump(state, f, indent=2, default=str)
+            json.dump(state, f, indent=2, default=pydantic_encoder)
         st.success("Session saved successfully!")
     except Exception as e:
         st.error(f"Failed to save session: {str(e)}")
+        logger.error(f"Session saving failed: {e}")
 
 def load_session_from_json() -> None:
-    """Load session state from JSON file."""
+    """Load session state from JSON file and reconstruct Pydantic models."""
     try:
         with open(f"{PERSISTENCE_KEY}.json", "r") as f:
             loaded_state = json.load(f)
+
+        # --- Model Reconstruction ---
+        # After loading, the CV objects are dicts. We must convert them back
+        # into StructuredCV model instances for the generator to work.
+        if loaded_state.get("source_cv"):
+            loaded_state["source_cv"] = StructuredCV.model_validate(loaded_state["source_cv"])
+            
+        if loaded_state.get("tailored_cv"):
+            loaded_state["tailored_cv"] = StructuredCV.model_validate(loaded_state["tailored_cv"])
+            
+        if loaded_state.get("final_cv"):
+            loaded_state["final_cv"] = StructuredCV.model_validate(loaded_state["final_cv"])
+
+        # Add any other Pydantic models here if they need reconstruction
+        if loaded_state.get("job_description_data"):
+            from models import JobDescriptionData
+            loaded_state["job_description_data"] = JobDescriptionData.model_validate(loaded_state["job_description_data"])
+        
+        if loaded_state.get("section_map"):
+            from models import SectionMap
+            loaded_state["section_map"] = SectionMap.model_validate(loaded_state["section_map"])
+
         update_app_state(loaded_state)
-        st.success("Session loaded successfully!")
+        st.success("Session loaded and validated successfully!")
         st.rerun()
     except FileNotFoundError:
         st.warning("No saved session found.")
     except Exception as e:
-        st.error(f"Failed to load session: {str(e)}")
+        st.error(f"Failed to load and validate session: {str(e)}")
+        logger.error(f"Session loading failed: {e}")
 ## Fisrt UI Rendering Of The Side-Bar Happen Here. ==================
 def render_sidebar() -> None:
     """Render the sidebar with session management and progress."""
@@ -202,66 +243,66 @@ def render_input_section() -> None:
 
 def _start_initial_workflow(state: AppState) -> None:
     """Helper function to orchestrate initial workflow steps with granular UI feedback.
-    
+
     This function breaks down the background processing into explicit steps:
     1. Parse job description
     2. Parse CV
     3. Setup iterative session
     4. Map source sections
-    
+
     Each step gets its own spinner and progress update for responsive UI.
     """
     try:
         current_state = state
-        
+
         # Step 1: Parse Job Description
         with st.spinner("📋 Parsing job description..."):
             logger.info("Starting job description parsing")
             current_state = run_graph_step(current_state)
             update_app_state(current_state)
-            
+
         # Check for errors after JD parsing
         if current_state.get("error_message"):
             st.error(f"❌ Job description parsing failed: {current_state['error_message']}")
             return
-            
+
         # Step 2: Parse CV
         with st.spinner("📄 Parsing CV content..."):
             logger.info("Starting CV parsing")
             current_state = run_graph_step(current_state)
             update_app_state(current_state)
-            
+
         # Check for errors after CV parsing
         if current_state.get("error_message"):
             st.error(f"❌ CV parsing failed: {current_state['error_message']}")
             return
-            
+
         # Step 3: Setup Iterative Session
         with st.spinner("⚙️ Setting up iterative session..."):
             logger.info("Starting iterative session setup")
             current_state = run_graph_step(current_state)
             update_app_state(current_state)
-            
+
         # Check for errors after session setup
         if current_state.get("error_message"):
             st.error(f"❌ Session setup failed: {current_state['error_message']}")
             return
-            
+
         # Step 4: Map Source Sections
         with st.spinner("🗺️ Mapping source sections..."):
             logger.info("Starting source section mapping")
             current_state = run_graph_step(current_state)
             update_app_state(current_state)
-            
+
         # Check for errors after section mapping
         if current_state.get("error_message"):
             st.error(f"❌ Section mapping failed: {current_state['error_message']}")
             return
-            
+
         logger.info("Initial workflow steps completed successfully")
         # Final rerun to refresh the UI with the completed initial steps
         st.rerun()
-        
+
     except Exception as e:
         logger.error(f"Initial workflow failed: {str(e)}")
         st.error(f"❌ Initial processing failed: {str(e)}")
@@ -409,7 +450,7 @@ def render_results_section(state: AppState, current_step: str) -> None:
                             contact_parts.append(final_cv.personal_info["phone"])
                         if final_cv.personal_info.get("linkedin"):
                             contact_parts.append(final_cv.personal_info["linkedin"])
-                        
+
                         if contact_parts:
                             contact_line = " | ".join(contact_parts)
                             st.markdown(f"**{contact_line}**")
@@ -487,7 +528,40 @@ def render_results_section(state: AppState, current_step: str) -> None:
         with col2:
             if st.button("🔄 Start New CV", use_container_width=True):
                 update_app_state(get_initial_state())
+
+        # LaTeX PDF Generation Section
+        st.divider()
+        st.subheader("📄 LaTeX PDF Version")
+
+        if st.button("✨ Generate LaTeX PDF", use_container_width=True):
+            with st.spinner("Generating and compiling LaTeX PDF... This may take a few moments and several retries."):
+                from latex_graph import latex_generation_graph
+                final_cv = state["final_cv"]
+                initial_agent_state = {"cv_data": final_cv, "retries": 0}
+
+                # Run the agent
+                final_agent_state = latex_generation_graph.invoke(initial_agent_state)
+
+                # Store and display the result
+                state['final_pdf_bytes'] = final_agent_state.get('pdf_bytes')
+                state['latex_error_log'] = final_agent_state.get('error_log')
+                update_app_state(state)
                 st.rerun()
+
+        # After the button, check if a PDF or error exists and display it
+        if state.get('final_pdf_bytes'):
+            st.success("PDF Generated Successfully!")
+            render_pdf(state['final_pdf_bytes'])
+            st.download_button(
+                label="⬇️ Download LaTeX PDF",
+                data=state['final_pdf_bytes'],
+                file_name="cv.pdf",
+                mime="application/pdf"
+            )
+        elif state.get('latex_error_log'):
+            st.error("Failed to generate PDF after multiple retries.")
+            with st.expander("View Final Error Log"):
+                st.code(state['latex_error_log'], language='log')
 
         return
 
@@ -581,6 +655,10 @@ def main() -> None:
 
     # Render main sections
     render_sidebar()  # Sidebar is always visible
+
+    # --- START OF ELEGANT LATEX TEST HARNESS ---
+    # --- Removed as we finish testing the latex generation function.
+    # --- END OF ELEGANT LATEX TEST HARNESS ---
 
     state = get_app_state()
     current_step = state.get("current_step", "input")

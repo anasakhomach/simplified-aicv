@@ -48,6 +48,10 @@ class AppState(TypedDict):
     error_message: NotRequired[str]
     has_error: NotRequired[bool]
 
+    # LaTeX PDF generation state
+    final_pdf_bytes: NotRequired[bytes]
+    latex_error_log: NotRequired[str]
+
 
 def get_initial_state() -> AppState:
     """Create initial application state with default values.
@@ -56,10 +60,10 @@ def get_initial_state() -> AppState:
         AppState: Initial state with default CV and JD loaded
     """
     # Read default files
-    with open("test-cv.txt", "r", encoding="utf-8") as f:
+    with open("test-cv.txt", "r", encoding="utf-8", errors="replace") as f:
         default_cv = f.read()
 
-    with open("test-jd.txt", "r", encoding="utf-8") as f:
+    with open("test-jd.txt", "r", encoding="utf-8", errors="replace") as f:
         default_jd = f.read()
 
     return {

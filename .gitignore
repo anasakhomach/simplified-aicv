@@ -49,12 +49,22 @@ Thumbs.db
 *.log
 app.log
 
+# Documentation and test files
+.docs/
+cv_generation_session.json
+golden_test_cv.json
+
 # Session files
 *.json
 cv_generation_session.json
 
 # Test files
-chat-*.txt
+#test-*.txt
+#chat-*.txt
+#*.txt
+!requirements.txt
+!test-cv.txt
+!test-jd.txt
 
 
 # Coverage reports
@@ -65,7 +75,7 @@ htmlcov/
 .pytest_cache/
 
 # Documentation
-.docs/
+#.docs/
 
 # Prompts folder (untracked)
 prompts/
@@ -74,7 +84,6 @@ prompts/
 .trae/
 
 # Image files
-*.png
 *.jpg
 *.jpeg
 *.gif

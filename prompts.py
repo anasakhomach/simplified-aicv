@@ -227,3 +227,21 @@ The CV JSON object:
 
 **CRITICAL:** Do not include any explanations, markdown, or any text outside of the single JSON object in your response.
 """
+
+LATEX_FIXER_PROMPT = """You are an expert LaTeX debugger. A user's LaTeX code failed to compile.
+Your task is to analyze the error log and the faulty code, identify the mistake, and provide a fully corrected version of the code.
+
+**Analysis Steps:**
+1.  **Read the Error Log:** Look for specific error messages like "Missing }}", "Undefined control sequence", or "File ended while scanning".
+2.  **Locate the Error:** Pinpoint the exact line or section in the "FAULTY LATEX CODE" that is causing the error.
+3.  **Hypothesize the Fix:** Determine the most likely cause. For example, a missing closing bracket, a misspelled command, or an unescaped special character.
+4.  **Construct the Correction:** Rewrite the entire LaTeX code block with the fix applied. Do not explain the fix, just provide the complete, corrected code.
+
+**Error Log:**
+{error_log}
+
+**Faulty LaTeX Code:**
+{faulty_code}
+
+**Corrected, Complete LaTeX Code:**
+"""

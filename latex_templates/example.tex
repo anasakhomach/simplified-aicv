@@ -1,0 +1,247 @@
+\documentclass[9pt, a4paper]{extarticle}
+
+% PACKAGES
+\usepackage[a4paper, top=9mm, bottom=9mm, left=9mm, right=9mm]{geometry} 
+\usepackage{xcolor} 
+\usepackage{paracol} 
+\usepackage{hyperref} 
+\usepackage{ragged2e} 
+\usepackage{enumitem} 
+\usepackage{etoolbox} 
+\usepackage{amsmath} 
+\usepackage{graphicx} 
+\usepackage{tikz}
+
+% FONT SETUP
+\usepackage[T1]{fontenc} 
+\usepackage[utf8]{inputenc} 
+\usepackage{avant} 
+\renewcommand{\familydefault}{\sfdefault} 
+
+% COLOR DEFINITIONS
+\definecolor{headerblue}{HTML}{2C5F7C} 
+\definecolor{sectionheadercolor}{HTML}{555555} 
+\definecolor{jobrolecolor}{HTML}{444444} 
+\definecolor{metadatacolor}{HTML}{666666} 
+\definecolor{bodycolor}{HTML}{444444} 
+\definecolor{lightgray}{HTML}{F5F5F5} 
+
+% HYPERLINK SETUP
+\hypersetup{
+    hidelinks, 
+    colorlinks=true, 
+    urlcolor=bodycolor, 
+    linkcolor=bodycolor, 
+    citecolor=bodycolor, 
+    breaklinks=true 
+}
+
+% SPACING AND GLOBAL SETTINGS
+\setlength{\parindent}{0pt} 
+\setlength{\parskip}{0.2ex} 
+\linespread{1.0} 
+
+% CUSTOM LIST SETTINGS
+\setlist[itemize]{
+    label=\textbullet, 
+    leftmargin=*,  
+    topsep=1ex,       
+    itemsep=0.9ex,    
+    parsep=0ex,        
+    partopsep=0ex,    
+    before=\RaggedRight 
+}
+
+% CUSTOM COMMANDS
+\newcommand{\sectionheader}[1]{%
+    \par\addvspace{3mm}% 
+    \noindent{\normalsize\bfseries\color{sectionheadercolor}\MakeUppercase{#1}}\par
+    \addvspace{.8mm}% 
+}
+
+\newcommand{\cvitemrole}[5]{%
+    \par\addvspace{3mm}% 
+    \noindent{\small\bfseries\color{sectionheadercolor}%
+        #1%
+        \ifstrempty{#2}{}{ - #2}%
+        \ifstrempty{#3}{}{ - #3}%
+    }\par 
+    \vspace{0.8mm}%
+    \noindent{\footnotesize\color{metadatacolor}#4}\par
+    \begin{itemize}% 
+        \small\mdseries\color{bodycolor} 
+        #5%
+    \end{itemize}%
+    \addvspace{1.5mm}% 
+}
+
+% A new, more compact command for sidebar items like Education and Certs
+\newcommand{\cvsidebaritem}[3]{%
+    \par\addvspace{1.5mm}%
+    \noindent{\mdseries\textbullet}~{\small\bfseries\color{sectionheadercolor}#1}\par
+    \ifstrempty{#2}{}{\noindent\hspace{1.5em}{\small\itshape\color{jobrolecolor}#2}\par}%
+    \ifstrempty{#3}{}{\vspace{0.3mm}\noindent\hspace{1.5em}{\footnotesize\color{metadatacolor}#3}\par}%
+    \addvspace{1mm}%
+}
+
+% =============================================================================
+% --- DOCUMENT BODY STARTS HERE ---
+% =============================================================================
+\begin{document}
+
+% --- HEADER SECTION ---
+\noindent
+\colorbox{lightgray}{%
+\begin{minipage}[c]{\dimexpr\textwidth-2\fboxsep\relax}
+    \vspace{2mm}
+    % --- Photo Column ---
+    \begin{minipage}[c]{0.17\textwidth}
+        \centering
+        \begin{tikzpicture}
+            \clip (0,0) circle (1.5cm);
+            % IMPORTANT: Replace with the actual name of your photo file
+            \node at (0,0) {\includegraphics[width=3.05cm]{white-Photoroom-Photoroom (3).png}};
+            \draw[headerblue, line width=4.5pt] (0,0) circle (1.5cm);
+        \end{tikzpicture}
+    \end{minipage}%
+    \hspace{0.05\textwidth}% Space between columns
+    % --- Text Column ---
+    \begin{minipage}[c]{0.75\textwidth}
+        \centering
+        \vspace*{\fill}
+        {\Huge\bfseries\color{headerblue}Anas AKHOMACH}\\[0.5em]
+        {\large\color{headerblue}DATA SCIENTIST \textperiodcentered MENDIX DEVELOPER}\\[1em]
+        \textcolor{headerblue}{\rule{10cm}{2pt}}\\[1em]
+        \begin{minipage}{14.5cm}
+            \centering
+            {\small\color{bodycolor}Data Scientist with a strong foundation in data analysis, Mendix development, and strategic planning, offering expertise in leveraging data to drive actionable insights and optimize processes. Proven ability to analyze complex datasets, as demonstrated by developing seasonal trend models using SQL, and experience in ERP process automation and dynamic dashboard development.}
+        \end{minipage}
+        \vspace*{\fill}
+    \end{minipage}
+     \vspace{2mm}
+\end{minipage}%
+}
+\vspace{5mm}
+
+% --- MAIN TWO-COLUMN LAYOUT ---
+\noindent
+\begin{minipage}[t]{0.67\textwidth}
+% --- LEFT (MAIN) COLUMN ---
+    
+    \sectionheader{Experience}
+    \cvitemrole{STE Smart-Send}
+        {Data Analyst [Trainee]}
+        {}
+        {Tetouan, Morocco \textperiodcentered\ Mar. 2024 - Jun. 2024}
+        {
+            \item Analyzed over 100,000 transactions using SQL to identify patterns and derive actionable insights, contributing to an 8\% increase in conversion rates.
+            \item Developed conversion funnels using SQL to pinpoint a 40\% drop-off in the shipping phase, enabling data-driven decision-making for process optimization.
+            \item Identified higher conversion rates on desktop versus mobile traffic, leading to user experience redesign and optimization of ad budgets to maximize revenue.
+            \item Developed seasonal trend models using SQL to forecast traffic during holidays, supporting proactive inventory planning and resource allocation.
+        }
+
+    \cvitemrole{Supply Chain Management Center}
+        {IT Instructor}
+        {}
+        {Tetouan, Morocco \textperiodcentered\ Jun - Sep 2022, Jun - Sep 2024}
+        {
+            \item Taught users how to develop and use Excel formulas, pivot tables, dashboards, and automated reporting tools.
+        }
+
+    \cvitemrole{Martile Secondary School}
+        {Mathematics Teacher}
+        {}
+        {Tetouan, Morocco \textperiodcentered\ Sep. 2017 – June. 2024}
+        {
+            \item Coached over 5 students to top-10 placements in national mathematics competitions.
+        }
+
+    \sectionheader{Projects}
+    \cvitemrole{AI-Powered CV Generator - aicvgen (SaaS Project, In Development)}
+        {}
+        {}
+        {Technologies: Python, Google Gemini LLM, LangGraph, Streamlit, ChromaDB, Docker}
+        {
+            \item Developed an AI-powered application for the automated creation of customized CVs using Google Gemini.
+            \item Designed and implemented a modular, agent-based system architecture with LangGraph orchestration and Dependency Injection for high maintainability and scalability.
+        }
+
+    \cvitemrole{ERP Process Automation and Dynamic Dashboard Development}
+        {}
+        {}
+        {Technologies: Sylob ERP, SQL, Excel VBA, QR Scanner}
+        {
+            \item Developed integrated dashboards, reducing daily inventory reconciliation from 4 hours to 15 minutes.
+            \item Optimized raw material workflows, reducing manual data errors, and improving real-time inventory accuracy.
+            \item Integrated QR code tracking, which reduced the time for material tracking in the production line.
+        }
+    
+    \cvitemrole{Operating Room Scheduling and Management System Optimization}
+        {}
+        {}
+        {Technologies: Python, MongoDB, PyMongo, Google Calendar API}
+        {
+            \item Developed a rule-based planning system using Tabu Search, improving the utilization of operating rooms.
+            \item Developed a classifier for the urgency of surgical procedures using Python, prioritizing emergencies with 75\% adherence to the schedule.
+            \item Optimized Tabu Search parameters, reducing calculation time for scheduling from hours to under 5 minutes.
+        }
+
+\end{minipage}%
+\hspace{8mm}%
+\begin{minipage}[t]{0.28\textwidth}
+% --- RIGHT (SIDEBAR) COLUMN ---
+
+    \sectionheader{Contact}
+    {\small\color{bodycolor}\bfseries E:~}\href{mailto:anasakhomach205@gmail.com}{\small\color{bodycolor}anasakhomach205@gmail.com}\par
+    \vspace{0.3ex}
+    {\small\color{bodycolor}\bfseries P:~}{\small\color{bodycolor}(+212) 600310536}\par
+
+    \sectionheader{Skills}
+    \begin{itemize}
+        \small\mdseries\color{bodycolor} 
+        \item Data Analysis \& Visualization
+        \item Mendix Development
+        \item Strategic Planning
+        \item Python \& SQL
+        \item Snowflake \& Alteryx
+        \item Tableau
+        \item Docker
+        \item LangGraph \& LLMs
+        \item MongoDB
+    \end{itemize}
+    
+% --- NEW EDUCATION SECTION ---
+\sectionheader{Education}
+\cvsidebaritem{Bachelor of Science in Applied Mathematics}
+    {Abdelmalek Essaâdi University | Tetouan, Morocco.}
+    {Recognized as a German university degree at the bachelor's level (Statement of Comparability from the ZAB)}
+
+\cvsidebaritem{High School Diploma (Mathematics and Engineering)}
+    {Lycée fqih Daoued | Mdiq, Morocco.}
+    {}
+    
+% --- NEW CERTIFICATIONS SECTION ---
+\sectionheader{Certifications}
+\cvsidebaritem{Google Advanced Data Analytics}
+    {Coursera, 2025}
+    {}
+\cvsidebaritem{Business Intelligence Analyst}
+    {Maven Analytics, 2024}
+    {}
+\cvsidebaritem{Python for Data Analytics}
+    {Maven Analytics, 2024}
+    {}
+
+    \sectionheader{Languages}
+    \begin{itemize}
+        \small\mdseries\color{bodycolor}
+        \item Arabic: Native
+        \item English: Professional (TOEIC B2)
+        \item German: Professional (telc B2)
+        \item French: Professional (B2)
+        \item Spanish: Intermediate (B1)
+    \end{itemize}
+
+\end{minipage}
+
+\end{document}
